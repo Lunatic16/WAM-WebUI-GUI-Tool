@@ -172,7 +172,9 @@ async def connect_speaker(ip: str, port: int):
         await web_app_instance.async_connect(ip, port)
         return {"status": "connected", "ip": ip, "port": port}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        detail_msg = f"Connection failed: {str(e)}"
+        logger.error(detail_msg)
+        raise HTTPException(status_code=500, detail=detail_msg)
 
 
 @app.post("/api/disconnect")
@@ -184,8 +186,13 @@ async def disconnect_speaker():
     if not hasattr(web_app_instance, 'speaker') or not web_app_instance.speaker:
         raise HTTPException(status_code=400, detail="Not connected to any speaker")
     
-    await web_app_instance.async_disconnect()
-    return {"status": "disconnected"}
+    try:
+        await web_app_instance.async_disconnect()
+        return {"status": "disconnected"}
+    except Exception as e:
+        detail_msg = f"Disconnection failed: {str(e)}"
+        logger.error(detail_msg)
+        raise HTTPException(status_code=500, detail=detail_msg)
 
 
 @app.get("/api/properties")
@@ -205,7 +212,9 @@ async def get_properties():
         states = ws.get_state_copy()
         return {"properties": states}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        detail_msg = f"Failed to get properties: {str(e)}"
+        logger.error(detail_msg)
+        raise HTTPException(status_code=500, detail=detail_msg)
 
 
 @app.get("/api/events")
@@ -272,7 +281,9 @@ async def send_api_request(
         
         return {"status": "sent", "method": method}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        detail_msg = f"Failed to send API request: {str(e)}"
+        logger.error(detail_msg)
+        raise HTTPException(status_code=500, detail=detail_msg)
 
 
 @app.websocket("/ws")

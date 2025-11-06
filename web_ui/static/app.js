@@ -156,15 +156,26 @@ connectBtn.addEventListener('click', async () => {
             })
         });
         
-        const result = await response.json();
-        
         if (response.ok) {
+            const result = await response.json();
             isConnected = true;
             updateConnectionStatus();
             addLog(`Connected to speaker at ${speakerIp.value}:${speakerPort.value}`);
             loadProperties(); // Load properties after connecting
         } else {
-            addLog(`Connection failed: ${result.detail || 'Unknown error'}`);
+            let errorMessage = 'Unknown error';
+            try {
+                const result = await response.json();
+                errorMessage = result.detail || JSON.stringify(result);
+            } catch (e) {
+                // If response is not JSON, try to get text
+                try {
+                    errorMessage = await response.text();
+                } catch (e2) {
+                    errorMessage = 'Unable to parse error response';
+                }
+            }
+            addLog(`Connection failed: ${errorMessage}`);
         }
     } catch (error) {
         addLog(`Connection error: ${error.message}`);
@@ -186,8 +197,19 @@ disconnectBtn.addEventListener('click', async () => {
             // Clear properties table
             propertiesTableBody.innerHTML = '<tr><td colspan="4" class="text-center">Connect to a speaker to see properties</td></tr>';
         } else {
-            const result = await response.json();
-            addLog(`Disconnection failed: ${result.detail || 'Unknown error'}`);
+            let errorMessage = 'Unknown error';
+            try {
+                const result = await response.json();
+                errorMessage = result.detail || JSON.stringify(result);
+            } catch (e) {
+                // If response is not JSON, try to get text
+                try {
+                    errorMessage = await response.text();
+                } catch (e2) {
+                    errorMessage = 'Unable to parse error response';
+                }
+            }
+            addLog(`Disconnection failed: ${errorMessage}`);
         }
     } catch (error) {
         addLog(`Disconnection error: ${error.message}`);
@@ -227,7 +249,19 @@ sendApiBtn.addEventListener('click', async () => {
         if (response.ok) {
             addLog(`API request sent: ${apiType.value}.${apiMethod.value}`);
         } else {
-            addLog(`API request failed: ${result.detail || 'Unknown error'}`);
+            let errorMessage = 'Unknown error';
+            try {
+                const result = await response.json();
+                errorMessage = result.detail || JSON.stringify(result);
+            } catch (e) {
+                // If response is not JSON, try to get text
+                try {
+                    errorMessage = await response.text();
+                } catch (e2) {
+                    errorMessage = 'Unable to parse error response';
+                }
+            }
+            addLog(`API request failed: ${errorMessage}`);
         }
     } catch (error) {
         addLog(`API request error: ${error.message}`);
@@ -245,8 +279,19 @@ async function loadProperties() {
             const data = await response.json();
             updatePropertiesTable(data.properties);
         } else {
-            const result = await response.json();
-            addLog(`Failed to load properties: ${result.detail || 'Unknown error'}`);
+            let errorMessage = 'Unknown error';
+            try {
+                const result = await response.json();
+                errorMessage = result.detail || JSON.stringify(result);
+            } catch (e) {
+                // If response is not JSON, try to get text
+                try {
+                    errorMessage = await response.text();
+                } catch (e2) {
+                    errorMessage = 'Unable to parse error response';
+                }
+            }
+            addLog(`Failed to load properties: ${errorMessage}`);
         }
     } catch (error) {
         addLog(`Error loading properties: ${error.message}`);
@@ -308,8 +353,19 @@ async function loadEvents() {
                 eventsList.innerHTML = '<p class="text-muted">No events received yet</p>';
             }
         } else {
-            const result = await response.json();
-            addLog(`Failed to load events: ${result.detail || 'Unknown error'}`);
+            let errorMessage = 'Unknown error';
+            try {
+                const result = await response.json();
+                errorMessage = result.detail || JSON.stringify(result);
+            } catch (e) {
+                // If response is not JSON, try to get text
+                try {
+                    errorMessage = await response.text();
+                } catch (e2) {
+                    errorMessage = 'Unable to parse error response';
+                }
+            }
+            addLog(`Failed to load events: ${errorMessage}`);
         }
     } catch (error) {
         addLog(`Error loading events: ${error.message}`);
