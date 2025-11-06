@@ -168,7 +168,7 @@ function updateDiscoveredSpeakersList(speakers) {
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <strong>${speaker.name || `Speaker ${index + 1}`}</strong><br>
-                    <small class="text-muted">${speaker.ip}:${speaker.port}</small>
+                    <small class="text-muted">${speaker.model || 'Samsung WAM Speaker'} - ${speaker.ip}:${speaker.port}</small>
                 </div>
                 <div>
                     <button class="btn btn-sm btn-primary connect-btn" data-ip="${speaker.ip}">
@@ -229,7 +229,7 @@ async function connectToSpeaker(ip) {
             updateConnectionStatus();
             
             // Select this speaker in the UI
-            selectSpeaker(ip);
+            await selectSpeaker(ip);
             
             // Load speaker properties
             loadSpeakerProperties(ip);
@@ -257,7 +257,7 @@ function updateConnectionStatus() {
             <div>
                 <span class="speaker-status ${isConnected ? 'status-online' : 'status-offline'}"></span>
                 <strong>${speaker.name || speaker.ip}</strong><br>
-                <small class="text-muted">${speaker.ip}:${speaker.port}</small>
+                <small class="text-muted">${speaker.model || 'Samsung WAM Speaker'} - ${speaker.ip}:${speaker.port}</small>
             </div>
             <div>
                 ${isConnected ? 
@@ -282,22 +282,39 @@ function updateConnectionStatus() {
 }
 
 // Select a speaker in the UI
-function selectSpeaker(ip) {
+async function selectSpeaker(ip) {
     selectedSpeaker = ip;
     
     // Update connection status display
     updateConnectionStatus();
     
     // Load controls for this speaker
-    loadSpeakerControls(ip);
+    await loadSpeakerControls(ip);
 }
 
 // Load speaker controls
-function loadSpeakerControls(ip) {
+async function loadSpeakerControls(ip) {
+    // Get detailed speaker info to display in the controls
+    let speakerName = getSpeakerName(ip);
+    let speakerModel = 'Samsung WAM Speaker';
+    
+    try {
+        const response = await fetch(`/api/speakers/${ip}/info`);
+        if (response.ok) {
+            const data = await response.json();
+            speakerName = data.info.name || speakerName;
+            speakerModel = data.info.model || speakerModel;
+        }
+    } catch (error) {
+        console.log('Could not fetch detailed speaker info:', error.message);
+        // Use fallback values
+    }
+    
     speakerControls.innerHTML = `
     <div class="row mb-3">
         <div class="col-md-6">
-            <h5>Control: ${getSpeakerName(ip)}</h5>
+            <h5>Control: ${speakerName}</h5>
+            <small class="text-muted">${speakerModel}</small>
         </div>
         <div class="col-md-6 text-end">
             <button class="btn btn-sm btn-outline-info" onclick="showSpeakerDetails('${ip}')">
@@ -440,22 +457,66 @@ function setInputSource(ip) {
 }
 
 // Show speaker details modal
-function showSpeakerDetails(ip, port = null) {
-    // In a real implementation, we would load actual speaker details
-    // For now, we'll show basic information
-    
-    const speaker = discoveredSpeakers.find(s => s.ip === ip);
-    if (!speaker) return;
-    
+async function showSpeakerDetails(ip, port = null) {
     const detailsBody = document.getElementById('speakerDetailsBody');
-    if (detailsBody) {
-        detailsBody.innerHTML = `
-        <tr><td>IP Address</td><td>${speaker.ip}</td></tr>
-        <tr><td>Port</td><td>${port || speaker.port || '55001'}</td></tr>
-        <tr><td>Name</td><td>${speaker.name || 'Unknown'}</td></tr>
-        <tr><td>Model</td><td>${speaker.model || 'Samsung WAM Speaker'}</td></tr>
-        <tr><td>Status</td><td>${selectedSpeaker === ip ? 'Connected' : 'Disconnected'}</td></tr>
-        `;
+    if (!detailsBody) return;
+    
+    // First try to get detailed info from the API
+    try {
+        const response = await fetch(`/api/speakers/${ip}/info`);
+        
+        if (response.ok) {
+            const data = await response.json();
+            const info = data.info;
+            
+            detailsBody.innerHTML = `
+            <tr><td>IP Address</td><td>${ip}</td></tr>
+            <tr><td>Port</td><td>${port || '55001'}</td></tr>
+            <tr><td>Name</td><td>${info.name}</td></tr>
+            <tr><td>Model</td><td>${info.model}</td></tr>
+            <tr><td>MAC Address</td><td>${info.mac}</td></tr>
+            <tr><td>Version</td><td>${info.version}</td></tr>
+            <tr><td>Power</td><td>${info.power}</td></tr>
+            <tr><td>Volume</td><td>${info.volume}</td></tr>
+            <tr><td>Input</td><td>${info.input}</td></tr>
+            <tr><td>Status</td><td>${selectedSpeaker === ip ? 'Connected' : 'Disconnected'}</td></tr>
+            `;
+        } else {
+            // Fallback to basic info if API call fails
+            const speaker = discoveredSpeakers.find(s => s.ip === ip);
+            if (speaker) {
+                detailsBody.innerHTML = `
+                <tr><td>IP Address</td><td>${speaker.ip}</td></tr>
+                <tr><td>Port</td><td>${port || speaker.port || '55001'}</td></tr>
+                <tr><td>Name</td><td>${speaker.name || 'Unknown'}</td></tr>
+                <tr><td>Model</td><td>${speaker.model || 'Samsung WAM Speaker'}</td></tr>
+                <tr><td>Status</td><td>${selectedSpeaker === ip ? 'Connected' : 'Disconnected'}</td></tr>
+                `;
+            } else {
+                detailsBody.innerHTML = `
+                <tr><td>IP Address</td><td>${ip}</td></tr>
+                <tr><td>Status</td><td>Not found in discovered speakers</td></tr>
+                `;
+            }
+        }
+    } catch (error) {
+        // Fallback to basic info if there's an error
+        const speaker = discoveredSpeakers.find(s => s.ip === ip);
+        if (speaker) {
+            detailsBody.innerHTML = `
+            <tr><td>IP Address</td><td>${speaker.ip}</td></tr>
+            <tr><td>Port</td><td>${port || speaker.port || '55001'}</td></tr>
+            <tr><td>Name</td><td>${speaker.name || 'Unknown'}</td></tr>
+            <tr><td>Model</td><td>${speaker.model || 'Samsung WAM Speaker'}</td></tr>
+            <tr><td>Status</td><td>${selectedSpeaker === ip ? 'Connected' : 'Disconnected'}</td></tr>
+            `;
+        } else {
+            detailsBody.innerHTML = `
+            <tr><td>IP Address</td><td>${ip}</td></tr>
+            <tr><td>Status</td><td>Error: ${error.message}</td></tr>
+            `;
+        }
+        addLog(`Error fetching speaker details: ${error.message}`);
     }
     
     // Show the modal using Bootstrap

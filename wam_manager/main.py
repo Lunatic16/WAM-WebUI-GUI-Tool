@@ -125,6 +125,7 @@ async def connect_speaker(speaker_ip: str):
         
         # Get initial state
         await temp_app.speaker.update()
+        
         # Get all attributes using WamAttributes
         from pywam.attributes import WamAttributes
         ws = WamAttributes()
@@ -132,7 +133,17 @@ async def connect_speaker(speaker_ip: str):
         
         speaker_states[speaker_ip] = all_attrs
         
-        return {"status": "connected", "ip": speaker_ip, "port": 55001}
+        # Try to get model and name from the attributes
+        model = all_attrs.get('model', 'Samsung WAM Speaker')
+        name = all_attrs.get('friendlyName', all_attrs.get('modelName', f"WAM Speaker at {speaker_ip}"))
+        
+        return {
+            "status": "connected", 
+            "ip": speaker_ip, 
+            "port": 55001,
+            "model": model,
+            "name": name
+        }
     except Exception as e:
         detail_msg = f"Connection failed: {str(e)}"
         logger.error(detail_msg)
@@ -146,6 +157,28 @@ async def get_speaker_properties(speaker_ip: str):
         raise HTTPException(status_code=404, detail="Speaker not connected")
     
     return {"properties": speaker_states[speaker_ip]}
+
+
+@app.get("/api/speakers/{speaker_ip}/info")
+async def get_speaker_info(speaker_ip: str):
+    """Get detailed speaker information including name and model."""
+    if speaker_ip not in discovered_speakers or speaker_ip not in speaker_states:
+        raise HTTPException(status_code=404, detail="Speaker not connected")
+    
+    properties = speaker_states[speaker_ip]
+    
+    # Extract speaker information from properties
+    info = {
+        "name": properties.get('friendlyName', properties.get('modelName', f"WAM Speaker at {speaker_ip}")),
+        "model": properties.get('model', 'Samsung WAM Speaker'),
+        "mac": properties.get('mac', 'Unknown'),
+        "version": properties.get('version', 'Unknown'),
+        "power": properties.get('power', 'Unknown'),
+        "volume": properties.get('volume', 'Unknown'),
+        "input": properties.get('input', 'Unknown'),
+    }
+    
+    return {"info": info}
 
 
 @app.post("/api/speakers/{speaker_ip}/command")

@@ -191,15 +191,18 @@ async def discover_wam_speakers_on_port_range() -> List[Dict[str, str]]:
         except:
             return []
     
-    def is_likely_wam_speaker(ip: str, port: int) -> bool:
+    def is_likely_wam_speaker(ip: str, port: int) -> tuple:
         """
         Check if a port response is likely from a WAM speaker by checking for WAM-specific responses.
+        Returns (is_likely, additional_info) where additional_info contains name/model if available.
         """
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(2.0)  # Increased timeout for HTTP requests
                 result = s.connect_ex((ip, port))
                 if result == 0:
+                    additional_info = {'name': f"WAM Speaker at {ip}", 'model': 'Samsung WAM Speaker'}
+                    
                     # For ports that would have HTTP responses, try to get headers
                     if port in [7676, 8001, 8080, 19999, 52345]:
                         # Send basic HTTP GET request to check for WAM-specific headers
@@ -208,11 +211,20 @@ async def discover_wam_speakers_on_port_range() -> List[Dict[str, str]]:
                         
                         # Look for WAM or Samsung specific identifiers in response
                         if any(brand in response.lower() for brand in ['wam', 'samsung', 'allshare', 'mongoose', 'lighttpd']):
-                            return True
-                    return True  # For other WAM ports, assume it's a WAM speaker if open
+                            # Try to extract model information from headers
+                            lines = response.split('\r\n')
+                            for line in lines:
+                                if 'server:' in line.lower():
+                                    additional_info['model'] = line.split(':', 1)[1].strip()
+                                elif 'friendlyname:' in line.lower() or 'modelname:' in line.lower():
+                                    additional_info['name'] = line.split(':', 1)[1].strip()
+                            
+                            return True, additional_info
+                    
+                    return True, additional_info
         except:
             pass
-        return False
+        return False, {'name': f"WAM Speaker candidate at {ip}", 'model': 'Samsung WAM (candidate)'}
     
     found_speakers = []
     # Known WAM ports from user information
@@ -225,12 +237,13 @@ async def discover_wam_speakers_on_port_range() -> List[Dict[str, str]]:
     
     for ip in network_ips:
         for port in wam_ports:
-            if is_likely_wam_speaker(ip, port):
+            is_likely, additional_info = is_likely_wam_speaker(ip, port)
+            if is_likely:
                 speaker_info = {
                     'ip': ip,
                     'port': str(port),
-                    'name': f"Samsung WAM Speaker at {ip}",
-                    'model': f'WAM on port {port}'
+                    'name': additional_info.get('name', f"Samsung WAM Speaker at {ip}"),
+                    'model': additional_info.get('model', f'WAM on port {port}')
                 }
                 
                 # Avoid duplicates
