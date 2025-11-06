@@ -43,7 +43,7 @@ function updateConnectionStatus() {
         disconnectBtn.disabled = false;
         sendApiBtn.disabled = false;
     } else {
-        connectionStatus.className = 'connection-status bg-secondary px-2 py-1 rounded';
+        connectionStatus.className = 'connection-status bg-secondary text-white px-2 py-1 rounded';
         connectionStatus.textContent = 'Disconnected';
         connectBtn.disabled = false;
         disconnectBtn.disabled = true;
@@ -57,7 +57,7 @@ function updateWsStatus() {
         wsStatus.className = 'ws-status bg-success text-white px-2 py-1 rounded';
         wsStatus.textContent = 'WS: Connected';
     } else {
-        wsStatus.className = 'ws-status bg-warning text-dark px-2 py-1 rounded';
+        wsStatus.className = 'ws-status bg-warning text-white px-2 py-1 rounded';
         wsStatus.textContent = 'WS: Connecting...';
     }
 }

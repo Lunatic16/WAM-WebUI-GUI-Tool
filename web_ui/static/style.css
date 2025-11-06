@@ -2,6 +2,8 @@
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     color: white;
+    font-size: 16px;
+    line-height: 1.6;
 }
 
 .card {
@@ -13,11 +15,13 @@ body {
 .table th {
     border-top: none;
     font-weight: 600;
-    color: white;
+    color: white !important;
+    font-size: 0.9rem;
 }
 
 .table td {
-    color: white;
+    color: white !important;
+    font-size: 0.9rem;
 }
 
 .status-indicator {
@@ -61,6 +65,7 @@ body {
     background-color: rgba(0, 0, 0, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: white;
+    font-size: 1rem;
 }
 
 .api-card .form-control:focus,
@@ -79,38 +84,46 @@ body {
 .table-dark th,
 .table-dark td,
 .table-dark thead th {
-    color: white;
+    color: white !important;
 }
 
 /* Ensure text is white in all form elements */
 .form-control,
 .form-select {
-    color: white;
+    color: white !important;
+    font-size: 1rem;
 }
 
 /* Ensure log output text is white */
 #logOutput {
-    color: white;
+    color: white !important;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    line-height: 1.5;
+    background-color: #1a1a2e;
+    padding: 10px;
+    border-radius: 5px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 /* Ensure event list text is white */
 #eventsList {
-    color: white;
+    color: white !important;
 }
 
 /* Ensure property table text is white */
 #propertiesTableBody {
-    color: white;
+    color: white !important;
 }
 
 /* Ensure all text in sidebar is white */
 .sidebar * {
-    color: white;
+    color: white !important;
 }
 
 /* Ensure all text in main content is white */
 .main-content * {
-    color: white;
+    color: white !important;
 }
 
 /* Specific overrides for text that might be affected by Bootstrap */
@@ -121,4 +134,91 @@ body {
 .navbar-text,
 .btn {
     color: white !important;
+}
+
+/* Better font sizing for readability */
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+}
+
+h5 {
+    font-size: 1.25rem;
+}
+
+h6 {
+    font-size: 1rem;
+}
+
+/* List group styles */
+.list-group-item {
+    color: white !important;
+}
+
+/* Badge styles */
+.badge {
+    color: white !important;
+}
+
+/* Button styles for better readability */
+.btn {
+    font-weight: 500;
+    font-size: 0.9rem;
+}
+
+/* Table styling for better readability */
+.table {
+    font-size: 0.9rem;
+}
+
+/* Override Bootstrap's default dark table styles to ensure readability */
+.table-dark {
+    color: white !important;
+    --bs-table-color: white;
+    --bs-table-bg: #212529;
+    --bs-table-border-color: #373b3e;
+    --bs-table-striped-bg: #2c3034;
+    --bs-table-hover-color: white;
+    --bs-table-hover-bg: #323539;
+}
+
+.table-dark th {
+    font-weight: 600;
+}
+
+/* Ensure all text elements are white */
+* {
+    color: white !important;
+}
+
+/* Override specific elements that might not inherit text color */
+.card-body,
+.card-footer,
+.card-header,
+.modal-header,
+.modal-body,
+.modal-footer {
+    color: white !important;
+}
+
+/* Scrollbar styling for better readability */
+#logOutput::-webkit-scrollbar,
+#eventsList::-webkit-scrollbar {
+    width: 8px;
+}
+
+#logOutput::-webkit-scrollbar-track,
+#eventsList::-webkit-scrollbar-track {
+    background: #1a1a2e;
+    border-radius: 4px;
+}
+
+#logOutput::-webkit-scrollbar-thumb,
+#eventsList::-webkit-scrollbar-thumb {
+    background: #4361ee;
+    border-radius: 4px;
+}
+
+#logOutput::-webkit-scrollbar-thumb:hover,
+#eventsList::-webkit-scrollbar-thumb:hover {
+    background: #3a56e4;
 }

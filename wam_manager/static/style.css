@@ -3,6 +3,8 @@
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     color: white;
+    font-size: 16px;
+    line-height: 1.6;
 }
 
 .card {
@@ -14,6 +16,13 @@ body {
 .table th {
     border-top: none;
     font-weight: 600;
+    color: white !important;
+    font-size: 0.9rem;
+}
+
+.table td {
+    color: white !important;
+    font-size: 0.9rem;
 }
 
 .status-indicator {
@@ -57,6 +66,7 @@ body {
     background-color: rgba(0, 0, 0, 0.2);
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: white;
+    font-size: 1rem;
 }
 
 .api-card .form-control:focus,
@@ -75,28 +85,32 @@ body {
 .table-dark th,
 .table-dark td,
 .table-dark thead th {
-    color: white;
+    color: white !important;
 }
 
 /* Ensure text is white in all form elements */
 .form-control,
 .form-select {
-    color: white;
+    color: white !important;
+    font-size: 1rem;
 }
 
 /* Ensure log output text is white */
 #logOutput {
-    color: white;
+    color: white !important;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9rem;
+    line-height: 1.5;
 }
 
 /* Ensure event list text is white */
 #eventsList {
-    color: white;
+    color: white !important;
 }
 
 /* Ensure property table text is white */
 #propertiesTableBody {
-    color: white;
+    color: white !important;
 }
 
 /* Specific overrides for text that might be affected by Bootstrap */
@@ -107,6 +121,19 @@ body {
 .navbar-text,
 .btn {
     color: white !important;
+}
+
+/* Better font sizing for readability */
+h1, h2, h3, h4, h5, h6 {
+    font-weight: 600;
+}
+
+h5 {
+    font-size: 1.25rem;
+}
+
+h6 {
+    font-size: 1rem;
 }
 
 /* Volume control styles */
@@ -139,12 +166,13 @@ body {
 
 /* Speaker list styles */
 .speaker-list-item {
-    padding: 10px;
+    padding: 12px;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 5px;
-    margin-bottom: 5px;
+    border-radius: 8px;
+    margin-bottom: 8px;
     cursor: pointer;
     transition: background-color 0.2s;
+    font-size: 1rem;
 }
 
 .speaker-list-item:hover {
@@ -159,4 +187,52 @@ body {
 .control-btn {
     margin: 5px;
     min-width: 70px;
+    font-size: 0.9rem;
+}
+
+/* Button styles for better readability */
+.btn {
+    font-weight: 500;
+}
+
+/* List group styles for connection status */
+.list-group-item {
+    background-color: var(--card-bg) !important;
+    color: white !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+.list-group-item strong {
+    color: white !important;
+}
+
+/* Modal styles */
+.modal-content {
+    color: white !important;
+}
+
+.modal-header,
+.modal-body,
+.modal-footer {
+    color: white !important;
+}
+
+/* Badge styles */
+.badge {
+    color: white !important;
+}
+
+/* Ensure all text elements are white */
+* {
+    color: white !important;
+}
+
+/* Override specific elements that might not inherit text color */
+.card-body,
+.card-footer,
+.card-header,
+.modal-header,
+.modal-body,
+.modal-footer {
+    color: white !important;
 }

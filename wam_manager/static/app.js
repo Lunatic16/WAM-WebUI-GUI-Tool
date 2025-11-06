@@ -30,7 +30,7 @@ function updateWsStatus() {
         wsStatus.className = 'ws-status bg-success text-white px-2 py-1 rounded';
         wsStatus.textContent = 'WS: Connected';
     } else {
-        wsStatus.className = 'ws-status bg-warning text-dark px-2 py-1 rounded';
+        wsStatus.className = 'ws-status bg-warning text-white px-2 py-1 rounded';
         wsStatus.textContent = 'WS: Connecting...';
     }
 }
