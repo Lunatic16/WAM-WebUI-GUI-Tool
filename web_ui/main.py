@@ -243,18 +243,33 @@ async def get_properties():
         for key, value in current_state.items():
             all_attrs[key] = value
         
-        # Ensure we return the correct speaker name and model attributes
-        # Try multiple possible attribute names for WAM speaker name
-        possible_names = ['name', 'spkname', 'device_id', 'app_name', 'devicename']
+        # Try to get the actual name from the connected speaker object if available
         speaker_name = 'WAM Speaker'
-        for name_field in possible_names:
-            if name_field in all_attrs and all_attrs[name_field] is not None and all_attrs[name_field] != "":
-                speaker_name = all_attrs[name_field]
-                break
+        try:
+            if hasattr(web_app_instance, 'speaker') and web_app_instance.speaker:
+                speaker_obj = web_app_instance.speaker
+                if hasattr(speaker_obj, 'get_name'):
+                    # Get the name directly from the speaker
+                    try:
+                        # Try to get name directly from the speaker
+                        speaker_name = await speaker_obj.get_name()
+                    except:
+                        # If async call fails, try attributes
+                        possible_names = ['name', 'spkname', 'device_id', 'app_name', 'devicename']
+                        for name_field in possible_names:
+                            if name_field in all_attrs and all_attrs[name_field] is not None and all_attrs[name_field] != "":
+                                speaker_name = all_attrs[name_field]
+                                break
+        except:
+            # If we can't get the name from the speaker object, use attributes
+            possible_names = ['name', 'spkname', 'device_id', 'app_name', 'devicename']
+            for name_field in possible_names:
+                if name_field in all_attrs and all_attrs[name_field] is not None and all_attrs[name_field] != "":
+                    speaker_name = all_attrs[name_field]
+                    break
         
-        # Update the name field with the proper name if not already set
-        if 'name' not in all_attrs or all_attrs['name'] is None or all_attrs['name'] == "":
-            all_attrs['name'] = speaker_name
+        # Update the name field with the proper name
+        all_attrs['name'] = speaker_name
         
         return {"properties": all_attrs}
     except Exception as e:

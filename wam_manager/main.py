@@ -134,16 +134,25 @@ async def connect_speaker(speaker_ip: str):
         ws = WamAttributes()
         all_attrs = ws.get_state_copy()
         
+        # Also get the actual speaker name using the get_name method
+        name = "WAM Speaker"
+        try:
+            # Try to get the actual name from the connected speaker
+            if hasattr(temp_app.speaker, 'get_name'):
+                name = await temp_app.speaker.get_name()
+        except:
+            # If we can't get the name, try to get it from attributes
+            name = all_attrs.get('name', 
+                    all_attrs.get('spkname', 
+                    all_attrs.get('device_id', 
+                    all_attrs.get('app_name', f"WAM Speaker at {speaker_ip}"))))
+        
         # Update state in our tracking
         speaker_states[speaker_ip] = all_attrs.copy()
         
         # Try to get model and name from the attributes
         # Prioritize correct WAM attribute names
         model = all_attrs.get('model', 'Samsung WAM Speaker')
-        name = all_attrs.get('name', 
-                all_attrs.get('spkname', 
-                all_attrs.get('device_id', 
-                all_attrs.get('app_name', f"WAM Speaker at {speaker_ip}"))))
         
         return {
             "status": "connected", 
@@ -175,14 +184,29 @@ async def get_speaker_info(speaker_ip: str):
     
     properties = speaker_states[speaker_ip]
     
-    # Extract speaker information from properties
-    # Try multiple possible attribute names for WAM speaker name
-    possible_names = ['name', 'spkname', 'device_id', 'app_name', 'devicename']
+    # Try to get the actual name from the connected speaker object if available
     speaker_name = f"WAM Speaker at {speaker_ip}"
-    for name_field in possible_names:
-        if name_field in properties and properties[name_field] is not None and properties[name_field] != "":
-            speaker_name = properties[name_field]
-            break
+    try:
+        if speaker_ip in discovered_speakers and discovered_speakers[speaker_ip]:
+            speaker_obj = discovered_speakers[speaker_ip]
+            if hasattr(speaker_obj, 'get_name'):
+                # Get the name directly from the speaker
+                speaker_name = await speaker_obj.get_name()
+    except:
+        # If we can't get the name from the speaker object, use attributes
+        possible_names = ['name', 'spkname', 'device_id', 'app_name', 'devicename']
+        for name_field in possible_names:
+            if name_field in properties and properties[name_field] is not None and properties[name_field] != "":
+                speaker_name = properties[name_field]
+                break
+    
+    if speaker_name == f"WAM Speaker at {speaker_ip}":
+        # If we still haven't found a proper name, try attributes again
+        possible_names = ['name', 'spkname', 'device_id', 'app_name', 'devicename']
+        for name_field in possible_names:
+            if name_field in properties and properties[name_field] is not None and properties[name_field] != "":
+                speaker_name = properties[name_field]
+                break
     
     info = {
         "name": speaker_name,
