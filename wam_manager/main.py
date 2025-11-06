@@ -123,19 +123,27 @@ async def connect_speaker(speaker_ip: str):
         # Store the speaker instance
         discovered_speakers[speaker_ip] = temp_app.speaker
         
-        # Get initial state
+        # Get initial state from the connected speaker
         await temp_app.speaker.update()
+        
+        # Wait a brief moment to ensure attributes are populated
+        await asyncio.sleep(0.5)
         
         # Get all attributes using WamAttributes
         from pywam.attributes import WamAttributes
         ws = WamAttributes()
         all_attrs = ws.get_state_copy()
         
-        speaker_states[speaker_ip] = all_attrs
+        # Update state in our tracking
+        speaker_states[speaker_ip] = all_attrs.copy()
         
         # Try to get model and name from the attributes
+        # Prioritize correct WAM attribute names
         model = all_attrs.get('model', 'Samsung WAM Speaker')
-        name = all_attrs.get('friendlyName', all_attrs.get('modelName', f"WAM Speaker at {speaker_ip}"))
+        name = all_attrs.get('name', 
+                all_attrs.get('spkname', 
+                all_attrs.get('device_id', 
+                all_attrs.get('app_name', f"WAM Speaker at {speaker_ip}"))))
         
         return {
             "status": "connected", 
@@ -168,14 +176,18 @@ async def get_speaker_info(speaker_ip: str):
     properties = speaker_states[speaker_ip]
     
     # Extract speaker information from properties
+    # Use the correct attribute names for WAM speakers
     info = {
-        "name": properties.get('friendlyName', properties.get('modelName', f"WAM Speaker at {speaker_ip}")),
+        "name": properties.get('name', 
+                properties.get('spkname', 
+                properties.get('device_id', 
+                properties.get('app_name', f"WAM Speaker at {speaker_ip}")))),
         "model": properties.get('model', 'Samsung WAM Speaker'),
         "mac": properties.get('mac', 'Unknown'),
-        "version": properties.get('version', 'Unknown'),
-        "power": properties.get('power', 'Unknown'),
+        "version": properties.get('software_version', properties.get('version', 'Unknown')),
+        "power": properties.get('state', 'Unknown'),
         "volume": properties.get('volume', 'Unknown'),
-        "input": properties.get('input', 'Unknown'),
+        "input": properties.get('source', properties.get('input', 'Unknown')),
     }
     
     return {"info": info}

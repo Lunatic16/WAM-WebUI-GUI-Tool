@@ -243,6 +243,17 @@ async def get_properties():
         for key, value in current_state.items():
             all_attrs[key] = value
         
+        # Ensure we return the correct speaker name and model attributes
+        # Prioritize the correct WAM attribute names
+        if 'name' not in all_attrs or all_attrs['name'] is None:
+            # Try to get name from other possible attributes
+            for attr_name in ['spkname', 'device_id', 'app_name']:
+                if attr_name in all_attrs and all_attrs[attr_name] is not None:
+                    all_attrs['name'] = all_attrs[attr_name]
+                    break
+            if 'name' not in all_attrs or all_attrs['name'] is None:
+                all_attrs['name'] = 'WAM Speaker'
+        
         return {"properties": all_attrs}
     except Exception as e:
         detail_msg = f"Failed to get properties: {str(e)}"
