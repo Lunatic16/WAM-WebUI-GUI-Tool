@@ -152,7 +152,7 @@ connectBtn.addEventListener('click', async () => {
             },
             body: JSON.stringify({
                 ip: speakerIp.value,
-                port: parseInt(speakerPort.value)
+                port: parseInt(speakerPort.value, 10)  // Ensure base 10 parsing
             })
         });
         
@@ -240,7 +240,9 @@ sendApiBtn.addEventListener('click', async () => {
                 method: apiMethod.value,
                 pwron: apiPwron.checked,
                 args: args,
-                timeout: parseInt(apiTimeout.value)
+                expected_response: "",  // Default empty
+                user_check: false,      // Default false
+                timeout: parseInt(apiTimeout.value, 10)
             })
         });
         

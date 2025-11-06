@@ -9,6 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
+from pydantic import BaseModel
 
 from pywam.speaker import Speaker
 from pywam.lib.api_call import ApiCall
@@ -162,15 +163,30 @@ async def get_settings():
     return {"settings": settings}
 
 
+class ConnectRequest(BaseModel):
+    ip: str
+    port: int
+
+
+class SendApiRequest(BaseModel):
+    api_type: str
+    method: str
+    pwron: bool = False
+    args: Optional[list] = []
+    expected_response: str = ""
+    user_check: bool = False
+    timeout: int = 1
+
+
 @app.post("/api/connect")
-async def connect_speaker(ip: str, port: int):
+async def connect_speaker(request: ConnectRequest):
     """Connect to a speaker."""
     if not web_app_instance:
         raise HTTPException(status_code=500, detail="App not initialized")
     
     try:
-        await web_app_instance.async_connect(ip, port)
-        return {"status": "connected", "ip": ip, "port": port}
+        await web_app_instance.async_connect(request.ip, request.port)
+        return {"status": "connected", "ip": request.ip, "port": request.port}
     except Exception as e:
         detail_msg = f"Connection failed: {str(e)}"
         logger.error(detail_msg)
@@ -243,15 +259,7 @@ async def get_events(limit: Optional[int] = Query(100, ge=1, le=1000)):
 
 
 @app.post("/api/send_api")
-async def send_api_request(
-    api_type: str,
-    method: str,
-    pwron: bool = False,
-    args: Optional[str] = Query("[]"),  # JSON string of arguments
-    expected_response: str = "",
-    user_check: bool = False,
-    timeout: int = 1
-):
+async def send_api_request(request: SendApiRequest):
     """Send an API request to the speaker."""
     if not web_app_instance:
         raise HTTPException(status_code=500, detail="App not initialized")
@@ -260,18 +268,15 @@ async def send_api_request(
         raise HTTPException(status_code=400, detail="Not connected to any speaker")
     
     try:
-        # Parse the args parameter
-        parsed_args = json.loads(args) if args else []
-        
         # Validate API call
         api_call = ApiCall(
-            api_type=api_type,
-            method=method,
-            pwron=pwron,
-            args=parsed_args,
-            expected_response=expected_response,
-            user_check=user_check,
-            timeout_multiple=timeout,
+            api_type=request.api_type,
+            method=request.method,
+            pwron=request.pwron,
+            args=request.args,
+            expected_response=request.expected_response,
+            user_check=request.user_check,
+            timeout_multiple=request.timeout,
         )
         
         web_app_instance.validate_api_call(api_call)
@@ -279,7 +284,7 @@ async def send_api_request(
         # Send the API request
         await web_app_instance.async_send_api(api_call)
         
-        return {"status": "sent", "method": method}
+        return {"status": "sent", "method": request.method}
     except Exception as e:
         detail_msg = f"Failed to send API request: {str(e)}"
         logger.error(detail_msg)
