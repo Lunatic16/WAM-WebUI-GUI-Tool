@@ -158,7 +158,16 @@
                             <label class="form-label">Port</label>
                             <input type="number" class="form-control" id="speakerPort" value="55001">
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label">Discovered Speakers</label>
+                            <select class="form-select" id="speakerDropdown" style="display: none;">
+                                <option value="">Select a Speaker</option>
+                            </select>
+                        </div>
                         <div class="d-grid gap-2">
+                            <button id="discoverBtn" class="btn btn-info">
+                                <i class="bi bi-search"></i> Discover
+                            </button>
                             <button id="connectBtn" class="btn btn-success">
                                 <i class="bi bi-power"></i> Connect
                             </button>

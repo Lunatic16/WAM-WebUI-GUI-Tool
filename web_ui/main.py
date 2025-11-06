@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from pydantic import BaseModel
+from .discovery import discover_wam_speakers, discover_wam_speakers_on_port_range
 
 from pywam.speaker import Speaker
 from pywam.lib.api_call import ApiCall
@@ -303,6 +304,24 @@ async def send_api_request(request: SendApiRequest):
         return {"status": "sent", "method": request.method}
     except Exception as e:
         detail_msg = f"Failed to send API request: {str(e)}"
+        logger.error(detail_msg)
+        raise HTTPException(status_code=500, detail=detail_msg)
+
+
+@app.get("/api/discover")
+async def discover_speakers():
+    """Discover WAM speakers on the network."""
+    try:
+        # First try SSDP discovery
+        speakers = await discover_wam_speakers()
+        
+        # If no speakers found via SSDP, try port-based discovery as fallback
+        if not speakers:
+            speakers = await discover_wam_speakers_on_port_range()
+        
+        return {"speakers": speakers}
+    except Exception as e:
+        detail_msg = f"Speaker discovery failed: {str(e)}"
         logger.error(detail_msg)
         raise HTTPException(status_code=500, detail=detail_msg)
 

@@ -424,7 +424,113 @@ document.addEventListener('DOMContentLoaded', () => {
     connectWebSocket();
     updateConnectionStatus();
     updateWsStatus();
+    
+    // Add event listener for the discover button if it exists
+    const discoverBtn = document.getElementById('discoverBtn');
+    if (discoverBtn) {
+        discoverBtn.addEventListener('click', discoverSpeakers);
+    }
+    
+    // Initialize speaker selection handling
+    handleSpeakerSelection();
 });
+
+// Discover speakers on the network
+async function discoverSpeakers() {
+    const discoverBtn = document.getElementById('discoverBtn');
+    if (discoverBtn) {
+        discoverBtn.disabled = true;
+        discoverBtn.innerHTML = '<i class="bi bi-search"></i> Discovering...';
+    }
+    
+    try {
+        addLog('Discovering WAM speakers on the network...');
+        const response = await fetch('/api/discover');
+        
+        let speakers = [];
+        try {
+            const data = await response.json();
+            speakers = data.speakers || [];
+        } catch (e) {
+            // If response is not JSON, try to get text
+            try {
+                const responseText = await response.text();
+                addLog(`Discovery failed: ${responseText}`);
+                return;
+            } catch (e2) {
+                addLog('Discovery failed: Unable to parse response');
+                return;
+            }
+        }
+        
+        if (response.ok) {
+            addLog(`Found ${speakers.length} speaker(s) on the network`);
+            
+            if (speakers.length > 0) {
+                // Update the speaker selection dropdown
+                updateSpeakerList(speakers);
+                
+                // If only one speaker is found, auto-populate the fields
+                if (speakers.length === 1) {
+                    speakerIp.value = speakers[0].ip;
+                    speakerPort.value = speakers[0].port;
+                    addLog(`Auto-selected: ${speakers[0].name || speakers[0].ip}`);
+                }
+            } else {
+                addLog('No WAM speakers found on the network');
+                // Still update dropdown with empty list to clear it
+                updateSpeakerList([]);
+            }
+        } else {
+            addLog(`Discovery failed: ${speakers.length > 0 ? speakers.length : 'Unknown error'}`);
+        }
+    } catch (error) {
+        addLog(`Discovery error: ${error.message}`);
+    } finally {
+        if (discoverBtn) {
+            discoverBtn.disabled = false;
+            discoverBtn.innerHTML = '<i class="bi bi-search"></i> Discover';
+        }
+    }
+}
+
+// Update speaker list in the dropdown
+function updateSpeakerList(speakers) {
+    const speakerDropdown = document.getElementById('speakerDropdown');
+    if (!speakerDropdown) return; // If no dropdown exists, skip this
+    
+    // Clear existing options (except the first "Select Speaker" option)
+    speakerDropdown.innerHTML = '<option value="">Select a Speaker</option>';
+    
+    if (speakers.length > 0) {
+        speakers.forEach((speaker, index) => {
+            const option = document.createElement('option');
+            option.value = `${speaker.ip}:${speaker.port}`;
+            option.textContent = `${speaker.name || `Speaker ${index + 1}`} - ${speaker.ip}:${speaker.port}`;
+            speakerDropdown.appendChild(option);
+        });
+        
+        // Make dropdown visible if it has content
+        speakerDropdown.style.display = 'block';
+    } else {
+        // Hide dropdown if no speakers found
+        speakerDropdown.style.display = 'none';
+    }
+}
+
+// Handle speaker selection from dropdown
+function handleSpeakerSelection() {
+    const speakerDropdown = document.getElementById('speakerDropdown');
+    if (!speakerDropdown) return;
+    
+    speakerDropdown.addEventListener('change', function() {
+        if (this.value) {
+            const [ip, port] = this.value.split(':');
+            speakerIp.value = ip;
+            speakerPort.value = port;
+        }
+    });
+}
 
 // Periodically ping the server to check connection status
 setInterval(() => {
