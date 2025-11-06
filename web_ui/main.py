@@ -66,8 +66,12 @@ async def lifespan(app: FastAPI):
     
     def web_state_receiver(state: dict) -> None:
         """Receiver for state changes that broadcasts to web clients."""
-        # Call the original receiver
-        original_state_receiver(state)
+        # Update the internal app state to keep track of current values
+        if hasattr(web_app_instance, 'current_state'):
+            web_app_instance.current_state.update(state)
+        else:
+            web_app_instance.current_state = state.copy()
+        
         # Broadcast to all connected WebSocket clients
         try:
             message = json.dumps({
@@ -186,6 +190,11 @@ async def connect_speaker(request: ConnectRequest):
     
     try:
         await web_app_instance.async_connect(request.ip, request.port)
+        
+        # After connecting, trigger an update to get all current properties
+        if web_app_instance.speaker:
+            await web_app_instance.speaker.update()
+        
         return {"status": "connected", "ip": request.ip, "port": request.port}
     except Exception as e:
         detail_msg = f"Connection failed: {str(e)}"
@@ -220,13 +229,20 @@ async def get_properties():
     if not hasattr(web_app_instance, 'speaker') or not web_app_instance.speaker:
         raise HTTPException(status_code=400, detail="Not connected to any speaker")
     
-    # Get the current state
     try:
-        # Get all attributes using WamAttributes
+        # Get all possible attributes using WamAttributes (like the GUI does)
         from pywam.attributes import WamAttributes
         ws = WamAttributes()
-        states = ws.get_state_copy()
-        return {"properties": states}
+        all_attrs = ws.get_state_copy()
+        
+        # Get current state from speaker updates if available
+        current_state = getattr(web_app_instance, 'current_state', {})
+        
+        # Merge: use current values where available, otherwise use default/all attributes
+        for key, value in current_state.items():
+            all_attrs[key] = value
+        
+        return {"properties": all_attrs}
     except Exception as e:
         detail_msg = f"Failed to get properties: {str(e)}"
         logger.error(detail_msg)
