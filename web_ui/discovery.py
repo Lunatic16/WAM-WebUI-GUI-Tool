@@ -16,7 +16,13 @@ class WamSpeakerDiscovery:
     SSDP_ADDR = "239.255.255.250"
     SSDP_PORT = 1900
     SSDP_MX = 3
-    SSDP_ST = "urn:schemas-upnp-org:device:MediaRenderer:1"  # UPnP device type for audio devices
+    # Try multiple service types that WAM speakers might use
+    SSDP_ST_OPTIONS = [
+        "urn:schemas-upnp-org:device:MediaRenderer:1",  # Standard for audio devices
+        "urn:samsung.com:device:WAMSpeaker:1",          # Samsung WAM-specific
+        "urn:schemas-upnp-org:service:WAM:1",            # UPnP service for WAM
+        "ssdp:all"                                       # General discovery
+    ]
     
     def __init__(self, timeout: int = 5):
         self.timeout = timeout
@@ -26,6 +32,15 @@ class WamSpeakerDiscovery:
         """Discover WAM speakers on the network."""
         self.found_speakers = []
         
+        # Try each SSDP service type
+        for ssdp_st in self.SSDP_ST_OPTIONS:
+            await self._send_discovery_request(ssdp_st)
+        
+        logger.info(f"Discovered {len(self.found_speakers)} WAM speaker(s)")
+        return self.found_speakers
+    
+    async def _send_discovery_request(self, ssdp_st: str):
+        """Send a discovery request for a specific service type."""
         # Create multicast socket
         sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         sock.settimeout(self.timeout)
@@ -36,7 +51,7 @@ class WamSpeakerDiscovery:
             sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 2)
             
             # Send SSDP discovery message
-            request = self._create_ssdp_request()
+            request = self._create_ssdp_request(ssdp_st)
             sock.sendto(request.encode(), (self.SSDP_ADDR, self.SSDP_PORT))
             
             # Receive responses
@@ -50,7 +65,8 @@ class WamSpeakerDiscovery:
                     speaker_info = self._parse_ssdp_response(response, addr)
                     if speaker_info:
                         # Avoid duplicates
-                        if not any(s['ip'] == speaker_info['ip'] for s in self.found_speakers):
+                        if not any(s['ip'] == speaker_info['ip'] and s['port'] == speaker_info['port'] 
+                                 for s in self.found_speakers):
                             self.found_speakers.append(speaker_info)
                             
                 except socket.timeout:
@@ -58,17 +74,14 @@ class WamSpeakerDiscovery:
                     
         finally:
             sock.close()
-        
-        logger.info(f"Discovered {len(self.found_speakers)} WAM speaker(s)")
-        return self.found_speakers
     
-    def _create_ssdp_request(self) -> str:
+    def _create_ssdp_request(self, ssdp_st: str) -> str:
         """Create SSDP discovery request."""
         request = f"""M-SEARCH * HTTP/1.1\r
 HOST: {self.SSDP_ADDR}:{self.SSDP_PORT}\r
 MAN: "ssdp:discover"\r
 MX: {self.SSDP_MX}\r
-ST: {self.SSDP_ST}\r
+ST: {ssdp_st}\r
 USER-AGENT: pywam Web UI/1.0\r
 \r
 """
@@ -76,14 +89,19 @@ USER-AGENT: pywam Web UI/1.0\r
     
     def _parse_ssdp_response(self, response: str, addr: tuple) -> Optional[Dict[str, str]]:
         """Parse SSDP response and extract speaker information."""
-        if "WAM" in response.upper() or "SAMSUNG" in response.upper() or "SPEAKER" in response.upper():
+        # Check if response contains WAM/Samsung identifiers
+        response_upper = response.upper()
+        has_wam_indicators = any(indicator in response_upper for indicator in 
+                                ['WAM', 'SAMSUNG', 'SPEAKER', 'ALLSHARE', 'MEDIARENDERER'])
+        
+        if has_wam_indicators:
             # Extract information from response
             lines = response.split('\r\n')
             info = {
                 'ip': addr[0],
-                'port': str(addr[1]),
-                'name': f"Speaker at {addr[0]}",
-                'model': 'Unknown'
+                'port': '55001',  # Default WAM API port
+                'name': f"WAM Speaker at {addr[0]}",
+                'model': 'Samsung WAM Speaker'
             }
             
             for line in lines:
@@ -91,21 +109,26 @@ USER-AGENT: pywam Web UI/1.0\r
                 if 'location:' in line_lower:
                     # Extract port from location URL
                     import re
+                    # Try to find port in location URL
                     matches = re.findall(r'://([^:]+):(\d+)', line)
                     if matches:
                         ip, port = matches[0]
                         info['port'] = port
-                        info['ip'] = ip
-                elif 'server:' in line_lower:
-                    info['model'] = line.split(':', 1)[1].strip()
+                        # Don't update IP from location as addr[0] is the source IP
+                    else:
+                        # If no port found in URL, try common WAM ports
+                        for common_port in [55001, 55002, 7676, 8001, 8080, 19999, 52345]:
+                            if f':{common_port}' in line:
+                                info['port'] = str(common_port)
+                                break
+                elif 'server:' in line_lower or 'user-agent:' in line_lower:
+                    server_info = line.split(':', 1)[1].strip()
+                    if server_info and 'Unknown' in info['model']:
+                        info['model'] = server_info
                 elif 'friendlyname:' in line_lower or 'modelname:' in line_lower:
-                    info['name'] = line.split(':', 1)[1].strip()
-            
-            # If no specific Samsung/WAM identification found but it's a MediaRenderer
-            if 'WAM' not in response.upper() and 'SAMSUNG' not in response.upper():
-                # Try to determine if it's a WAM speaker by trying to connect to common WAM ports
-                if addr[1] in [55001, 55002, 55003, 55004]:  # Common WAM ports
-                    info['name'] = f"Samsung WAM Speaker at {addr[0]}"
+                    name_info = line.split(':', 1)[1].strip()
+                    if name_info:
+                        info['name'] = name_info
             
             return info
         
@@ -132,8 +155,12 @@ async def discover_wam_speakers() -> List[Dict[str, str]]:
     Discover WAM speakers using both SSDP and targeted port scanning.
     Returns a list of dictionaries containing speaker information.
     """
-    discovery = WamSpeakerDiscovery(timeout=5)
+    discovery = WamSpeakerDiscovery(timeout=3)  # Reduced timeout for faster SSDP
     speakers = await discovery.discover()
+    
+    # If no speakers found via SSDP, try port-based discovery as fallback
+    if not speakers:
+        speakers = await discover_wam_speakers_on_port_range()
     
     # Sort speakers by IP for consistent display
     speakers.sort(key=lambda x: x['ip'])
@@ -143,7 +170,7 @@ async def discover_wam_speakers() -> List[Dict[str, str]]:
 
 async def discover_wam_speakers_on_port_range() -> List[Dict[str, str]]:
     """
-    Alternative discovery method that checks common WAM ports on local network.
+    Alternative discovery method that checks known WAM ports on local network.
     This is more direct but may take longer.
     """
     import ipaddress
@@ -164,40 +191,50 @@ async def discover_wam_speakers_on_port_range() -> List[Dict[str, str]]:
         except:
             return []
     
-    found_speakers = []
-    common_ports = [55001, 55002, 55003, 55004]
-    network_ips = get_local_network_ips()
-    
-    async def check_ip_port(ip, port):
-        """Check if a specific IP and port responds like a WAM speaker."""
+    def is_likely_wam_speaker(ip: str, port: int) -> bool:
+        """
+        Check if a port response is likely from a WAM speaker by checking for WAM-specific responses.
+        """
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(1.0)
+                s.settimeout(2.0)  # Increased timeout for HTTP requests
                 result = s.connect_ex((ip, port))
                 if result == 0:
-                    # Found open port, test if it's a WAM speaker
-                    # For now, just add it as a potential WAM speaker
-                    # In a real implementation, we'd check for WAM-specific responses
-                    return {
-                        'ip': ip,
-                        'port': str(port),
-                        'name': f"WAM Speaker candidate at {ip}",
-                        'model': 'Samsung WAM (candidate)'
-                    }
+                    # For ports that would have HTTP responses, try to get headers
+                    if port in [7676, 8001, 8080, 19999, 52345]:
+                        # Send basic HTTP GET request to check for WAM-specific headers
+                        s.send(f"GET / HTTP/1.1\r\nHost: {ip}\r\n\r\n".encode())
+                        response = s.recv(1024).decode('utf-8', errors='ignore')
+                        
+                        # Look for WAM or Samsung specific identifiers in response
+                        if any(brand in response.lower() for brand in ['wam', 'samsung', 'allshare', 'mongoose', 'lighttpd']):
+                            return True
+                    return True  # For other WAM ports, assume it's a WAM speaker if open
         except:
             pass
-        return None
+        return False
     
-    # Check common WAM ports on local network
-    tasks = []
+    found_speakers = []
+    # Known WAM ports from user information
+    wam_ports = [7676, 8001, 8080, 15500, 19999, 52345, 55000, 55001]
+    network_ips = get_local_network_ips()
+    
+    # Limit the IP range to speed up discovery
+    if len(network_ips) > 50:  # Only scan first 50 IPs if network is large
+        network_ips = network_ips[:50]
+    
     for ip in network_ips:
-        for port in common_ports:
-            tasks.append(check_ip_port(ip, port))
-    
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    
-    for result in results:
-        if isinstance(result, dict) and result not in found_speakers:
-            found_speakers.append(result)
+        for port in wam_ports:
+            if is_likely_wam_speaker(ip, port):
+                speaker_info = {
+                    'ip': ip,
+                    'port': str(port),
+                    'name': f"Samsung WAM Speaker at {ip}",
+                    'model': f'WAM on port {port}'
+                }
+                
+                # Avoid duplicates
+                if not any(s['ip'] == ip and s['port'] == str(port) for s in found_speakers):
+                    found_speakers.append(speaker_info)
     
     return found_speakers
