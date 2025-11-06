@@ -83,10 +83,30 @@ The traditional GUI provides the same core functionality as before with a deskto
 
 The following scripts are available for managing the application:
 
-- `start_web_ui.sh` - Starts the FastAPI web server interface
+- `start_web_ui.sh` - Starts the FastAPI web server interface (port 8000)
 - `stop_web_ui.sh` - Stops the FastAPI web server
 - `start_gui.sh` - Starts the traditional tkinter GUI
 - `stop_gui.sh` - Stops the traditional tkinter GUI
+- `start_wam_manager.sh` - Starts the WAM Speaker Manager (port 8001)
+- `stop_wam_manager.sh` - Stops the WAM Speaker Manager
+
+### WAM Speaker Manager
+
+The project now includes a specialized web UI for managing Samsung WAM speakers:
+
+1. To start the WAM Speaker Manager:
+   ```bash
+   ./start_wam_manager.sh
+   ```
+
+2. Access the interface at `http://localhost:8001`
+
+The WAM Speaker Manager provides:
+- Network discovery of WAM speakers using SSDP/UPnP
+- Remote control of discovered speakers through API port 55001
+- Power, volume, and playback controls
+- Input source selection
+- Real-time speaker status monitoring
 
 ## Support the work
 
