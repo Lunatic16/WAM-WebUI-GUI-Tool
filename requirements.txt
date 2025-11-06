@@ -1,0 +1,6 @@
+pywam
+fastapi
+uvicorn[standard]
+websockets
+python-multipart
+jinja2

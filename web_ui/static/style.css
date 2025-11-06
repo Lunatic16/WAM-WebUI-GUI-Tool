@@ -1,0 +1,124 @@
+/* Additional styles for the pywam web UI */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: white;
+}
+
+.card {
+    border: none;
+    border-radius: 10px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.table th {
+    border-top: none;
+    font-weight: 600;
+    color: white;
+}
+
+.table td {
+    color: white;
+}
+
+.status-indicator {
+    display: inline-block;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    margin-right: 8px;
+}
+
+.status-connected {
+    background-color: #28a745;
+}
+
+.status-disconnected {
+    background-color: #dc3545;
+}
+
+.ws-status-connected {
+    background-color: #28a745;
+}
+
+.ws-status-disconnected {
+    background-color: #ffc107;
+}
+
+.event-item {
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+    padding-bottom: 10px;
+    margin-bottom: 10px;
+}
+
+.event-item:last-child {
+    border-bottom: none;
+    margin-bottom: 0;
+    padding-bottom: 0;
+}
+
+.api-card .form-control,
+.api-card .form-select {
+    background-color: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+.api-card .form-control:focus,
+.api-card .form-select:focus {
+    background-color: rgba(0, 0, 0, 0.3);
+    border-color: #4361ee;
+    color: white;
+    box-shadow: 0 0 0 0.2rem rgba(67, 97, 238, 0.25);
+}
+
+.text-white {
+    color: white !important;
+}
+
+/* Override Bootstrap dark table text color */
+.table-dark th,
+.table-dark td,
+.table-dark thead th {
+    color: white;
+}
+
+/* Ensure text is white in all form elements */
+.form-control,
+.form-select {
+    color: white;
+}
+
+/* Ensure log output text is white */
+#logOutput {
+    color: white;
+}
+
+/* Ensure event list text is white */
+#eventsList {
+    color: white;
+}
+
+/* Ensure property table text is white */
+#propertiesTableBody {
+    color: white;
+}
+
+/* Ensure all text in sidebar is white */
+.sidebar * {
+    color: white;
+}
+
+/* Ensure all text in main content is white */
+.main-content * {
+    color: white;
+}
+
+/* Specific overrides for text that might be affected by Bootstrap */
+.card-title,
+.card-header,
+.card-text,
+.navbar-brand,
+.navbar-text,
+.btn {
+    color: white !important;
+}
