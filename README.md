@@ -83,12 +83,42 @@ The traditional GUI provides the same core functionality as before with a deskto
 
 The following scripts are available for managing the application:
 
-- `start_web_ui.sh` - Starts the FastAPI web server interface (port 8000)
-- `stop_web_ui.sh` - Stops the FastAPI web server
+- `manage_interfaces.sh` - Unified script to manage both Web UI and WAM Manager interfaces
 - `start_gui.sh` - Starts the traditional tkinter GUI
 - `stop_gui.sh` - Stops the traditional tkinter GUI
-- `start_wam_manager.sh` - Starts the WAM Speaker Manager (port 8001)
-- `stop_wam_manager.sh` - Stops the WAM Speaker Manager
+
+### Using the Unified Management Script
+
+The unified script provides easy management of both web interfaces:
+
+```bash
+# Start Web UI only
+./manage_interfaces.sh start webui
+
+# Start WAM Manager only
+./manage_interfaces.sh start manager
+
+# Start both interfaces
+./manage_interfaces.sh start all
+# or simply:
+./manage_interfaces.sh start
+
+# Stop both interfaces
+./manage_interfaces.sh stop all
+# or simply:
+./manage_interfaces.sh stop
+
+# Restart Web UI only
+./manage_interfaces.sh restart webui
+
+# Check status of both interfaces
+./manage_interfaces.sh status
+
+# Get help
+./manage_interfaces.sh
+```
+
+The Web UI runs on port 8000 and the WAM Manager runs on port 8001.
 
 ### WAM Speaker Manager
 
