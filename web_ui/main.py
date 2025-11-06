@@ -244,15 +244,17 @@ async def get_properties():
             all_attrs[key] = value
         
         # Ensure we return the correct speaker name and model attributes
-        # Prioritize the correct WAM attribute names
-        if 'name' not in all_attrs or all_attrs['name'] is None:
-            # Try to get name from other possible attributes
-            for attr_name in ['spkname', 'device_id', 'app_name']:
-                if attr_name in all_attrs and all_attrs[attr_name] is not None:
-                    all_attrs['name'] = all_attrs[attr_name]
-                    break
-            if 'name' not in all_attrs or all_attrs['name'] is None:
-                all_attrs['name'] = 'WAM Speaker'
+        # Try multiple possible attribute names for WAM speaker name
+        possible_names = ['name', 'spkname', 'device_id', 'app_name', 'devicename']
+        speaker_name = 'WAM Speaker'
+        for name_field in possible_names:
+            if name_field in all_attrs and all_attrs[name_field] is not None and all_attrs[name_field] != "":
+                speaker_name = all_attrs[name_field]
+                break
+        
+        # Update the name field with the proper name if not already set
+        if 'name' not in all_attrs or all_attrs['name'] is None or all_attrs['name'] == "":
+            all_attrs['name'] = speaker_name
         
         return {"properties": all_attrs}
     except Exception as e:

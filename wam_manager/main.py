@@ -176,14 +176,18 @@ async def get_speaker_info(speaker_ip: str):
     properties = speaker_states[speaker_ip]
     
     # Extract speaker information from properties
-    # Use the correct attribute names for WAM speakers
+    # Try multiple possible attribute names for WAM speaker name
+    possible_names = ['name', 'spkname', 'device_id', 'app_name', 'devicename']
+    speaker_name = f"WAM Speaker at {speaker_ip}"
+    for name_field in possible_names:
+        if name_field in properties and properties[name_field] is not None and properties[name_field] != "":
+            speaker_name = properties[name_field]
+            break
+    
     info = {
-        "name": properties.get('name', 
-                properties.get('spkname', 
-                properties.get('device_id', 
-                properties.get('app_name', f"WAM Speaker at {speaker_ip}")))),
-        "model": properties.get('model', 'Samsung WAM Speaker'),
-        "mac": properties.get('mac', 'Unknown'),
+        "name": speaker_name,
+        "model": properties.get('model', properties.get('spkmodelname', 'Samsung WAM Speaker')),
+        "mac": properties.get('mac', properties.get('spkmacaddr', 'Unknown')),
         "version": properties.get('software_version', properties.get('version', 'Unknown')),
         "power": properties.get('state', 'Unknown'),
         "volume": properties.get('volume', 'Unknown'),
