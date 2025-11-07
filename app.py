@@ -41,8 +41,6 @@ class App:
         if __name__ == "__main__":
             self.gui = Window(self)
             await self.gui.show()
-            if self.speaker:
-                await self.async_disconnect()
         else:
             # For web server usage, just initialize
             pass
