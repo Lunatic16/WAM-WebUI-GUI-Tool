@@ -390,6 +390,83 @@ async function loadSpeakerControls(ip) {
                 Set Input
             </button>
         </div>
+        
+        <!-- Equalizer Presets -->
+        <div class="col-md-12 mb-3">
+            <h6>Equalizer</h6>
+            <div class="row">
+                <div class="col-md-6">
+                    <label class="form-label">EQ Presets</label>
+                    <select class="form-select mb-2" id="eqPreset-${ip}">
+                        <option value="Normal">Normal</option>
+                        <option value="Flat">Flat</option>
+                        <option value="Jazz">Jazz</option>
+                        <option value="Rock">Rock</option>
+                        <option value="Classical">Classical</option>
+                        <option value="Bass Boost">Bass Boost</option>
+                        <option value="Treble Boost">Treble Boost</option>
+                        <option value="Movie">Movie</option>
+                        <option value="Voice">Voice</option>
+                    </select>
+                    <button class="btn btn-primary btn-sm" onclick="setEqPreset('${ip}')">
+                        Apply EQ Preset
+                    </button>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Manual Equalizer</label>
+                    <button class="btn btn-outline-secondary btn-sm d-block mb-2" onclick="resetEqValues('${ip}')">
+                        Reset to Flat
+                    </button>
+                    <button class="btn btn-success btn-sm d-block" onclick="setEqValues('${ip}')">
+                        Apply Manual EQ
+                    </button>
+                </div>
+            </div>
+            
+            <!-- Manual EQ Bands -->
+            <div class="row mt-3">
+                <div class="col-12">
+                    <h6 class="mt-3">Manual EQ Bands:</h6>
+                    <div class="eq-controls-container p-3" style="background: rgba(255,255,255,0.05); border-radius: 8px;">
+                        <div class="eq-band mb-3">
+                            <label class="form-label">150 Hz: <span id="eq150-value-${ip}">0</span>dB</label>
+                            <input type="range" class="form-range" id="eq150-${ip}" min="-6" max="6" value="0" 
+                                oninput="document.getElementById('eq150-value-${ip}').textContent = this.value">
+                        </div>
+                        <div class="eq-band mb-3">
+                            <label class="form-label">300 Hz: <span id="eq300-value-${ip}">0</span>dB</label>
+                            <input type="range" class="form-range" id="eq300-${ip}" min="-6" max="6" value="0" 
+                                oninput="document.getElementById('eq300-value-${ip}').textContent = this.value">
+                        </div>
+                        <div class="eq-band mb-3">
+                            <label class="form-label">600 Hz: <span id="eq600-value-${ip}">0</span>dB</label>
+                            <input type="range" class="form-range" id="eq600-${ip}" min="-6" max="6" value="0" 
+                                oninput="document.getElementById('eq600-value-${ip}').textContent = this.value">
+                        </div>
+                        <div class="eq-band mb-3">
+                            <label class="form-label">1.2 kHz: <span id="eq1200-value-${ip}">0</span>dB</label>
+                            <input type="range" class="form-range" id="eq1200-${ip}" min="-6" max="6" value="0" 
+                                oninput="document.getElementById('eq1200-value-${ip}').textContent = this.value">
+                        </div>
+                        <div class="eq-band mb-3">
+                            <label class="form-label">2.5 kHz: <span id="eq2500-value-${ip}">0</span>dB</label>
+                            <input type="range" class="form-range" id="eq2500-${ip}" min="-6" max="6" value="0" 
+                                oninput="document.getElementById('eq2500-value-${ip}').textContent = this.value">
+                        </div>
+                        <div class="eq-band mb-3">
+                            <label class="form-label">5.0 kHz: <span id="eq5000-value-${ip}">0</span>dB</label>
+                            <input type="range" class="form-range" id="eq5000-${ip}" min="-6" max="6" value="0" 
+                                oninput="document.getElementById('eq5000-value-${ip}').textContent = this.value">
+                        </div>
+                        <div class="eq-band mb-3">
+                            <label class="form-label">10 kHz: <span id="eq10000-value-${ip}">0</span>dB</label>
+                            <input type="range" class="form-range" id="eq10000-${ip}" min="-6" max="6" value="0" 
+                                oninput="document.getElementById('eq10000-value-${ip}').textContent = this.value">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
     `;
     
@@ -400,6 +477,46 @@ async function loadSpeakerControls(ip) {
             sendCommand(ip, 'volume', e.target.value);
         });
     }
+}
+
+// Set EQ preset
+function setEqPreset(ip) {
+    const eqSelect = document.getElementById(`eqPreset-${ip}`);
+    if (eqSelect) {
+        const value = eqSelect.value;
+        sendCommand(ip, 'set_eq_preset', value);
+    }
+}
+
+// Set manual EQ values
+function setEqValues(ip) {
+    // Get all EQ band values from the sliders
+    const eq150 = document.getElementById(`eq150-${ip}`).value;
+    const eq300 = document.getElementById(`eq300-${ip}`).value;
+    const eq600 = document.getElementById(`eq600-${ip}`).value;
+    const eq1200 = document.getElementById(`eq1200-${ip}`).value;
+    const eq2500 = document.getElementById(`eq2500-${ip}`).value;
+    const eq5000 = document.getElementById(`eq5000-${ip}`).value;
+    const eq10000 = document.getElementById(`eq10000-${ip}`).value;
+    
+    // For now, use a default preset index of 0
+    // In the future, we could get the current preset index from the speaker
+    const presetIndex = 0;
+    
+    const values = `${presetIndex},${eq150},${eq300},${eq600},${eq1200},${eq2500},${eq5000},${eq10000}`;
+    sendCommand(ip, 'set_eq_values', values);
+}
+
+// Reset to flat EQ
+function resetEqValues(ip) {
+    document.getElementById(`eq150-${ip}`).value = 0;
+    document.getElementById(`eq300-${ip}`).value = 0;
+    document.getElementById(`eq600-${ip}`).value = 0;
+    document.getElementById(`eq1200-${ip}`).value = 0;
+    document.getElementById(`eq2500-${ip}`).value = 0;
+    document.getElementById(`eq5000-${ip}`).value = 0;
+    document.getElementById(`eq10000-${ip}`).value = 0;
+    setEqValues(ip);
 }
 
 // Get speaker name by IP

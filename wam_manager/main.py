@@ -321,6 +321,61 @@ async def send_command(speaker_ip: str, command: str, value: Optional[str] = Non
                 user_check=False,
                 timeout_multiple=1,
             )
+        elif command == "set_eq_preset":
+            # For preset names, we need to map them to the correct preset index
+            # Default mappings - these might need to be adjusted based on actual available presets
+            preset_mapping = {
+                "Normal": 0,
+                "Flat": 1,
+                "Jazz": 2,
+                "Rock": 3,
+                "Classical": 4,
+                "Bass Boost": 5,
+                "Treble Boost": 6,
+                "Movie": 7,
+                "Voice": 8
+            }
+            
+            preset_index = preset_mapping.get(value, 0)  # Default to 0 if not found
+            
+            api_call = ApiCall(
+                api_type="UIC",
+                method="Set7bandEQMode",
+                pwron=False,
+                args=[["presetindex", preset_index, "dec"]],
+                expected_response="7bandEQMode",
+                user_check=False,
+                timeout_multiple=1,
+            )
+        elif command == "set_eq_values":
+            # Parse the value as comma-separated equalizer values
+            # Expected format: "preset_index,eq1,eq2,eq3,eq4,eq5,eq6,eq7"
+            # where eq values are between -6 and 6
+            try:
+                values = [int(v.strip()) for v in value.split(',')]
+                if len(values) == 8:  # preset index + 7 eq values
+                    api_call = ApiCall(
+                        api_type="UIC",
+                        method="Set7bandEQValue",
+                        pwron=False,
+                        args=[
+                            ["presetindex", values[0], "dec"],
+                            ["eqvalue1", values[1], "dec"],
+                            ["eqvalue2", values[2], "dec"],
+                            ["eqvalue3", values[3], "dec"],
+                            ["eqvalue4", values[4], "dec"],
+                            ["eqvalue5", values[5], "dec"],
+                            ["eqvalue6", values[6], "dec"],
+                            ["eqvalue7", values[7], "dec"]
+                        ],
+                        expected_response="7bandEQValue",
+                        user_check=False,
+                        timeout_multiple=1,
+                    )
+                else:
+                    raise ValueError("Invalid number of EQ values. Expected 8 (preset index + 7 eq values)")
+            except (ValueError, IndexError) as e:
+                raise HTTPException(status_code=400, detail=f"Invalid EQ values format: {str(e)}")
         else:
             raise HTTPException(status_code=400, detail="Unknown command")
         
