@@ -259,10 +259,3 @@ The project is licensed under the [MIT License](https://opensource.org/licenses/
 ## Disclaimer Notice
 
 With this tool you will be able to send commands to the speaker that I have never tested. I can NOT guarantee that your speaker is compatible with this app, and you can't hold me responsible if you brick your speaker when using this app.
-
-## Support the work
-
-[![BuyMeCoffee][coffeebadge]][coffeelink]
-
-[coffeelink]: https://www.buymeacoffee.com/76strixx
-[coffeebadge]: https://www.buymeacoffee.com/assets/img/custom_images/orange_img.png
