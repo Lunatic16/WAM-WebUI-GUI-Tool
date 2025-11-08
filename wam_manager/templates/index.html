@@ -155,9 +155,10 @@
 
     <div class="container-fluid mt-4">
         <div class="row">
-            <!-- Discovery Panel -->
-            <div class="col-md-4">
-                <div class="card discovery-card mb-4">
+            <!-- Discovery and Connections Panel -->
+            <div class="col-lg-4">
+                <!-- Discovery Section -->
+                <div class="card mb-4">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0"><i class="bi bi-search"></i> Speaker Discovery</h5>
                     </div>
@@ -165,6 +166,9 @@
                         <div class="d-grid gap-2 mb-3">
                             <button id="discoverBtn" class="btn btn-info">
                                 <i class="bi bi-search"></i> Discover Speakers
+                            </button>
+                            <button id="disconnectAllBtn" class="btn btn-outline-danger" onclick="disconnectAllSpeakers()">
+                                <i class="bi bi-x-circle"></i> Disconnect All
                             </button>
                         </div>
                         
@@ -176,25 +180,37 @@
                         </div>
                     </div>
                 </div>
-
-                <!-- Connection status -->
+                
+                <!-- Connected Speakers Section -->
                 <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0"><i class="bi bi-plug"></i> Connection Status</h5>
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-speakers"></i> Connected Speakers</h5>
                     </div>
                     <div class="card-body">
-                        <div id="connectionStatusDiv">
+                        <div id="connectedSpeakersList">
                             <p class="text-muted">No speakers connected</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Groups Section -->
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-collection-play"></i> Speaker Groups</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="groupsList">
+                            <p class="text-muted">No speaker groups available</p>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Speaker Controls -->
-            <div class="col-md-8">
+            <!-- Control Panel -->
+            <div class="col-lg-8">
                 <div class="card control-card mb-4">
                     <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="mb-0"><i class="bi bi-controller"></i> Speaker Controls</h5>
+                        <h5 class="mb-0"><i class="bi bi-controller"></i> Speaker/Group Controls</h5>
                         <div>
                             <button id="refreshControlsBtn" class="btn btn-outline-light btn-sm me-2">
                                 <i class="bi bi-arrow-clockwise"></i> Refresh
@@ -205,16 +221,19 @@
                         <div id="speakerControls">
                             <div class="text-center p-4">
                                 <i class="bi bi-speaker display-4 text-muted"></i>
-                                <p class="mt-3 text-muted">Select a speaker to control</p>
+                                <p class="mt-3 text-muted">Select a speaker or group to control</p>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Logs -->
+                <!-- Activity Log -->
                 <div class="card">
-                    <div class="card-header">
+                    <div class="card-header d-flex justify-content-between align-items-center">
                         <h5 class="mb-0"><i class="bi bi-terminal"></i> Activity Log</h5>
+                        <button class="btn btn-sm btn-outline-light" onclick="document.getElementById('logOutput').textContent = ''">
+                            <i class="bi bi-trash"></i> Clear
+                        </button>
                     </div>
                     <div class="card-body">
                         <div class="bg-dark p-3 rounded" style="height: 200px; overflow-y: auto;">

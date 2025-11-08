@@ -21,9 +21,11 @@ from app import App
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Global variable to hold discovered speakers
+# Global variables to hold discovered speakers and groups
 discovered_speakers: Dict[str, Speaker] = {}
 speaker_states: Dict[str, dict] = {}
+speaker_connections: Dict[str, App] = {}  # Track connection apps for each speaker
+speaker_groups: Dict[str, List[str]] = {}  # Track groups of speakers
 
 class ConnectionManager:
     def __init__(self):
@@ -113,18 +115,35 @@ async def discover_speakers():
 async def connect_speaker(speaker_ip: str):
     """Connect to a specific speaker."""
     try:
-        # Create a temporary app instance to connect to the speaker
-        temp_app = App()
-        temp_app.settings.load_settings()  # Load default settings
+        # Check if already connected
+        if speaker_ip in speaker_connections:
+            # Return info about already connected speaker
+            speaker = discovered_speakers.get(speaker_ip)
+            if speaker:
+                # Get name and model from current state if available
+                name = speaker_states.get(speaker_ip, {}).get('name', f"WAM Speaker at {speaker_ip}")
+                model = speaker_states.get(speaker_ip, {}).get('model', 'Samsung WAM Speaker')
+                return {
+                    "status": "already_connected", 
+                    "ip": speaker_ip, 
+                    "port": 55001,
+                    "model": model,
+                    "name": name
+                }
+        
+        # Create a new app instance to connect to the speaker
+        app_instance = App()
+        app_instance.settings.load_settings()  # Load default settings
         
         # Connect to the speaker on port 55001 (the API port)
-        await temp_app.async_connect(speaker_ip, 55001)
+        await app_instance.async_connect(speaker_ip, 55001)
         
-        # Store the speaker instance
-        discovered_speakers[speaker_ip] = temp_app.speaker
+        # Store the speaker instance and app connection
+        discovered_speakers[speaker_ip] = app_instance.speaker
+        speaker_connections[speaker_ip] = app_instance
         
         # Get initial state from the connected speaker
-        await temp_app.speaker.update()
+        await app_instance.speaker.update()
         
         # Wait a brief moment to ensure attributes are populated
         await asyncio.sleep(0.5)
@@ -138,8 +157,8 @@ async def connect_speaker(speaker_ip: str):
         name = "WAM Speaker"
         try:
             # Try to get the actual name from the connected speaker
-            if hasattr(temp_app.speaker, 'get_name'):
-                name = await temp_app.speaker.get_name()
+            if hasattr(app_instance.speaker, 'get_name'):
+                name = await app_instance.speaker.get_name()
         except:
             # If we can't get the name, try to get it from attributes
             name = all_attrs.get('name', 
@@ -154,17 +173,126 @@ async def connect_speaker(speaker_ip: str):
         # Prioritize correct WAM attribute names
         model = all_attrs.get('model', 'Samsung WAM Speaker')
         
+        # Check if this speaker is part of a group
+        group_info = await get_speaker_group_info(speaker_ip, app_instance.speaker)
+        if group_info:
+            group_id = group_info.get('id', f"group_{speaker_ip}")
+            if group_id not in speaker_groups:
+                speaker_groups[group_id] = []
+            if speaker_ip not in speaker_groups[group_id]:
+                speaker_groups[group_id].append(speaker_ip)
+        
         return {
             "status": "connected", 
             "ip": speaker_ip, 
             "port": 55001,
             "model": model,
-            "name": name
+            "name": name,
+            "is_group_member": bool(group_info)
         }
     except Exception as e:
         detail_msg = f"Connection failed: {str(e)}"
         logger.error(detail_msg)
         raise HTTPException(status_code=500, detail=detail_msg)
+
+
+async def get_speaker_group_info(speaker_ip: str, speaker_instance) -> Optional[dict]:
+    """Get group information for a speaker."""
+    try:
+        # Check if the speaker has group-related attributes
+        state = speaker_states.get(speaker_ip, {})
+        group_info = {}
+        
+        # Common group-related attributes to check
+        if state.get('group_id'):
+            group_info['id'] = state['group_id']
+        if state.get('group_name'):
+            group_info['name'] = state['group_name']
+        if state.get('is_grouped'):
+            group_info['is_grouped'] = state['is_grouped']
+        
+        return group_info if group_info else None
+    except Exception as e:
+        logger.error(f"Error getting group info for {speaker_ip}: {e}")
+        return None
+
+
+@app.post("/api/speakers/disconnect_all")
+async def disconnect_all_speakers():
+    """Disconnect from all speakers."""
+    disconnected = []
+    
+    for speaker_ip in list(speaker_connections.keys()):
+        try:
+            app_instance = speaker_connections[speaker_ip]
+            if app_instance and hasattr(app_instance, 'async_disconnect'):
+                await app_instance.async_disconnect()
+            
+            # Remove from tracking
+            if speaker_ip in discovered_speakers:
+                del discovered_speakers[speaker_ip]
+            if speaker_ip in speaker_states:
+                del speaker_states[speaker_ip]
+            if speaker_ip in speaker_connections:
+                del speaker_connections[speaker_ip]
+            
+            disconnected.append(speaker_ip)
+        except Exception as e:
+            logger.error(f"Error disconnecting speaker {speaker_ip}: {e}")
+    
+    # Clear all groups
+    speaker_groups.clear()
+    
+    return {"status": "disconnected_all", "disconnected_ips": disconnected}
+
+
+@app.get("/api/speakers")
+async def get_all_speakers():
+    """Get information about all connected speakers."""
+    speakers_info = []
+    
+    for speaker_ip in speaker_connections.keys():
+        if speaker_ip in speaker_states:
+            state = speaker_states[speaker_ip]
+            name = state.get('name', f"WAM Speaker at {speaker_ip}")
+            model = state.get('model', 'Samsung WAM Speaker')
+            
+            # Check if part of a group
+            is_grouped = any(speaker_ip in group for group in speaker_groups.values())
+            
+            speakers_info.append({
+                "ip": speaker_ip,
+                "name": name,
+                "model": model,
+                "is_grouped": is_grouped
+            })
+    
+    return {"speakers": speakers_info}
+
+
+@app.get("/api/groups")
+async def get_groups():
+    """Get information about speaker groups."""
+    groups_info = []
+    
+    for group_id, speaker_list in speaker_groups.items():
+        group_info = {
+            "id": group_id,
+            "speakers": []
+        }
+        
+        for speaker_ip in speaker_list:
+            if speaker_ip in speaker_states:
+                state = speaker_states[speaker_ip]
+                group_info["speakers"].append({
+                    "ip": speaker_ip,
+                    "name": state.get('name', f"WAM Speaker at {speaker_ip}"),
+                    "model": state.get('model', 'Samsung WAM Speaker')
+                })
+        
+        groups_info.append(group_info)
+    
+    return {"groups": groups_info}
 
 
 @app.get("/api/speakers/{speaker_ip}/properties")
@@ -222,7 +350,66 @@ async def get_speaker_info(speaker_ip: str):
 
 
 @app.post("/api/speakers/{speaker_ip}/command")
-async def send_command(speaker_ip: str, command: str, value: Optional[str] = None):
+async def send_command(speaker_ip: str, command: str, value: Optional[str] = None, target: str = "individual"):
+    """Send a command to a specific speaker or group.
+    
+    Args:
+        speaker_ip: IP of a specific speaker or group ID if target is 'group'
+        command: Command to send
+        value: Value for the command
+        target: "individual" for single speaker, "group" to send to all speakers in the group
+    """
+    if target == "group":
+        # Find the group containing this speaker
+        group_id = None
+        for gid, speakers in speaker_groups.items():
+            if speaker_ip in speakers:
+                group_id = gid
+                break
+        
+        if group_id is None:
+            raise HTTPException(status_code=404, detail="Group not found for this speaker")
+        
+        # Send command to all speakers in the group
+        success_count = 0
+        fail_count = 0
+        results = []
+        
+        for group_speaker_ip in speaker_groups[group_id]:
+            try:
+                result = await send_command_to_speaker(group_speaker_ip, command, value)
+                results.append({
+                    "ip": group_speaker_ip,
+                    "status": "success",
+                    "command": result["command"],
+                    "value": result["value"]
+                })
+                success_count += 1
+            except Exception as e:
+                results.append({
+                    "ip": group_speaker_ip,
+                    "status": "failed",
+                    "error": str(e)
+                })
+                fail_count += 1
+        
+        return {
+            "status": "group_command_sent", 
+            "command": command, 
+            "value": value,
+            "group_id": group_id,
+            "results": results,
+            "success_count": success_count,
+            "fail_count": fail_count
+        }
+    else:  # target == "individual"
+        if speaker_ip not in discovered_speakers:
+            raise HTTPException(status_code=404, detail="Speaker not connected")
+        
+        return await send_command_to_speaker(speaker_ip, command, value)
+
+
+async def send_command_to_speaker(speaker_ip: str, command: str, value: Optional[str] = None):
     """Send a command to a specific speaker."""
     if speaker_ip not in discovered_speakers:
         raise HTTPException(status_code=404, detail="Speaker not connected")
@@ -409,10 +596,55 @@ async def websocket_endpoint(websocket: WebSocket):
                     # Respond to ping with current status
                     status = {
                         "type": "pong",
-                        "speakers_count": len(discovered_speakers),
-                        "connected_speakers": list(discovered_speakers.keys())
+                        "speakers_count": len(speaker_connections),
+                        "connected_speakers": list(speaker_connections.keys()),
+                        "groups_count": len(speaker_groups)
                     }
                     await manager.send_personal_message(json.dumps(status), websocket)
+                elif command.get("type") == "request_speakers":
+                    # Send all connected speakers info
+                    speakers_info = []
+                    for speaker_ip in speaker_connections.keys():
+                        if speaker_ip in speaker_states:
+                            state = speaker_states[speaker_ip]
+                            is_grouped = any(speaker_ip in group for group in speaker_groups.values())
+                            speakers_info.append({
+                                "ip": speaker_ip,
+                                "name": state.get('name', f"WAM Speaker at {speaker_ip}"),
+                                "model": state.get('model', 'Samsung WAM Speaker'),
+                                "is_grouped": is_grouped
+                            })
+                    
+                    response = json.dumps({
+                        "type": "speakers_list",
+                        "speakers": speakers_info
+                    })
+                    await manager.send_personal_message(response, websocket)
+                elif command.get("type") == "request_groups":
+                    # Send all groups info
+                    groups_info = []
+                    for group_id, speaker_list in speaker_groups.items():
+                        group_info = {
+                            "id": group_id,
+                            "speakers": []
+                        }
+                        
+                        for speaker_ip in speaker_list:
+                            if speaker_ip in speaker_states:
+                                state = speaker_states[speaker_ip]
+                                group_info["speakers"].append({
+                                    "ip": speaker_ip,
+                                    "name": state.get('name', f"WAM Speaker at {speaker_ip}"),
+                                    "model": state.get('model', 'Samsung WAM Speaker')
+                                })
+                        
+                        groups_info.append(group_info)
+                    
+                    response = json.dumps({
+                        "type": "groups_list",
+                        "groups": groups_info
+                    })
+                    await manager.send_personal_message(response, websocket)
             except json.JSONDecodeError:
                 # If not JSON, just echo it back
                 await manager.send_personal_message(f"Server received: {data}", websocket)

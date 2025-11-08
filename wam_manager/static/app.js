@@ -4,13 +4,17 @@
 let ws = null;
 let wsConnected = false;
 let selectedSpeaker = null;
+let selectedGroup = null;  // Added for group controls
 let discoveredSpeakers = [];
+let connectedSpeakers = [];  // Track connected speakers
+let speakerGroups = [];  // Track speaker groups
 let reconnectAttempts = 0;
 const maxReconnectAttempts = 10;
 
 // DOM elements
 const discoverBtn = document.getElementById('discoverBtn');
 const discoveredSpeakersList = document.getElementById('discoveredSpeakersList');
+const connectedSpeakersList = document.getElementById('connectedSpeakersList');  // Added
 const logOutput = document.getElementById('logOutput');
 const wsStatus = document.getElementById('wsStatus');
 const connectionStatusDiv = document.getElementById('connectionStatusDiv');
@@ -33,6 +37,12 @@ function updateWsStatus() {
         wsStatus.className = 'ws-status bg-warning text-white px-2 py-1 rounded';
         wsStatus.textContent = 'WS: Connecting...';
     }
+}
+
+// Get speaker name by IP
+function getSpeakerName(ip) {
+    const speaker = [...discoveredSpeakers, ...connectedSpeakers].find(s => s.ip === ip);
+    return speaker ? (speaker.name || ip) : ip;
 }
 
 // Connect to WebSocket
@@ -63,9 +73,20 @@ function connectWebSocket() {
                 if (data.type === 'connected') {
                     // Initial connection confirmation
                     addLog('WebSocket connection established');
+                    // Request speakers and groups list
+                    ws.send(JSON.stringify({type: "request_speakers"}));
+                    ws.send(JSON.stringify({type: "request_groups"}));
                 } else if (data.type === 'pong') {
                     // Response to ping
                     console.log('Server status:', data);
+                } else if (data.type === 'speakers_list') {
+                    // Update speakers list
+                    connectedSpeakers = data.speakers || [];
+                    updateConnectedSpeakersList();
+                } else if (data.type === 'groups_list') {
+                    // Update groups list
+                    speakerGroups = data.groups || [];
+                    updateGroupsList();
                 } else {
                     console.log('Unknown message type:', data);
                 }
@@ -163,6 +184,7 @@ function updateDiscoveredSpeakersList(speakers) {
     
     let html = '';
     speakers.forEach((speaker, index) => {
+        const isConnected = connectedSpeakers.some(s => s.ip === speaker.ip);
         html += `
         <div class="speaker-list-item" data-ip="${speaker.ip}" data-port="${speaker.port}">
             <div class="d-flex justify-content-between align-items-center">
@@ -171,9 +193,12 @@ function updateDiscoveredSpeakersList(speakers) {
                     <small class="text-muted">${speaker.model || 'Samsung WAM Speaker'} - ${speaker.ip}:${speaker.port}</small>
                 </div>
                 <div>
-                    <button class="btn btn-sm btn-primary connect-btn" data-ip="${speaker.ip}">
-                        Connect
-                    </button>
+                    ${isConnected ? 
+                        '<span class="badge bg-success">Connected</span>' : 
+                        `<button class="btn btn-sm btn-primary connect-btn" data-ip="${speaker.ip}">
+                            Connect
+                        </button>`
+                    }
                 </div>
             </div>
         </div>
@@ -211,6 +236,146 @@ function updateDiscoveredSpeakersList(speakers) {
             showSpeakerDetails(ip, port);
         });
     });
+}
+
+// Update the connected speakers list in UI
+function updateConnectedSpeakersList() {
+    if (connectedSpeakers.length === 0) {
+        connectedSpeakersList.innerHTML = '<p class="text-muted">No speakers connected</p>';
+        return;
+    }
+    
+    let html = '<ul class="list-group">';
+    connectedSpeakers.forEach(speaker => {
+        const isGrouped = speaker.is_grouped;
+        html += `
+        <li class="list-group-item d-flex justify-content-between align-items-center" style="background-color: var(--card-bg);">
+            <div>
+                <strong>${speaker.name || speaker.ip}</strong><br>
+                <small class="text-muted">${speaker.model || 'Samsung WAM Speaker'} - ${speaker.ip}</small>
+                ${isGrouped ? '<span class="badge bg-info ms-1">Grouped</span>' : ''}
+            </div>
+            <div>
+                <button class="btn btn-sm btn-outline-info me-1" onclick="loadSpeakerControls('${speaker.ip}')">
+                    <i class="bi bi-controller"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="disconnectSpeaker('${speaker.ip}')">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>
+        </li>
+        `;
+    });
+    html += '</ul>';
+    
+    connectedSpeakersList.innerHTML = html;
+}
+
+// Update groups list in UI
+function updateGroupsList() {
+    // Find the groups list container
+    const groupsListContainer = document.getElementById('groupsList');
+    if (!groupsListContainer) return;
+    
+    if (speakerGroups.length === 0) {
+        groupsListContainer.innerHTML = '<p class="text-muted">No speaker groups available</p>';
+        return;
+    }
+    
+    let html = '<ul class="list-group">';
+    speakerGroups.forEach(group => {
+        html += `
+        <li class="list-group-item" style="background-color: var(--card-bg);">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">Group: ${group.id}</h6>
+                <button class="btn btn-sm btn-outline-primary" onclick="loadGroupControls('${group.id}')">
+                    Control Group
+                </button>
+            </div>
+            <div>
+                <small class="text-muted">Speakers in this group:</small>
+                <ul class="list-unstyled mt-1">
+        `;
+        
+        group.speakers.forEach(speaker => {
+            html += `<li><small>${speaker.name || speaker.ip} (${speaker.ip})</small></li>`;
+        });
+        
+        html += `
+                </ul>
+            </div>
+        </li>
+        `;
+    });
+    html += '</ul>';
+    
+    groupsListContainer.innerHTML = html;
+}
+
+// Disconnect a specific speaker
+async function disconnectSpeaker(ip) {
+    try {
+        addLog(`Disconnecting from speaker at ${ip}...`);
+        const response = await fetch(`/api/speakers/${ip}/disconnect`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            addLog(`Disconnected from speaker at ${ip}`);
+            // Update UI to reflect disconnection
+            if (selectedSpeaker === ip) {
+                selectedSpeaker = null;
+                speakerControls.innerHTML = `
+                    <div class="text-center p-4">
+                        <i class="bi bi-speaker display-4 text-muted"></i>
+                        <p class="mt-3 text-muted">Select a speaker to control</p>
+                    </div>
+                `;
+            }
+            // Refresh the connected speakers list
+            ws.send(JSON.stringify({type: "request_speakers"}));
+        } else {
+            const result = await response.json();
+            addLog(`Disconnection failed: ${result.detail || 'Unknown error'}`);
+        }
+    } catch (error) {
+        addLog(`Disconnection error: ${error.message}`);
+    }
+}
+
+// Disconnect all speakers
+async function disconnectAllSpeakers() {
+    try {
+        addLog('Disconnecting from all speakers...');
+        const response = await fetch('/api/speakers/disconnect_all', {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            addLog(`Disconnected from all speakers: ${result.disconnected_ips.join(', ')}`);
+            // Update UI
+            connectedSpeakers = [];
+            speakerGroups = [];
+            selectedSpeaker = null;
+            selectedGroup = null;
+            
+            speakerControls.innerHTML = `
+                <div class="text-center p-4">
+                    <i class="bi bi-speaker display-4 text-muted"></i>
+                    <p class="mt-3 text-muted">Select a speaker or group to control</p>
+                </div>
+            `;
+            
+            updateConnectedSpeakersList();
+            updateGroupsList();
+        } else {
+            const result = await response.json();
+            addLog(`Disconnect all failed: ${result.detail || 'Unknown error'}`);
+        }
+    } catch (error) {
+        addLog(`Disconnect all error: ${error.message}`);
+    }
 }
 
 // Connect to a specific speaker
@@ -294,6 +459,9 @@ async function selectSpeaker(ip) {
 
 // Load speaker controls
 async function loadSpeakerControls(ip) {
+    selectedSpeaker = ip;
+    selectedGroup = null; // Clear any selected group
+    
     // Get detailed speaker info to display in the controls
     let speakerName = getSpeakerName(ip);
     let speakerModel = 'Samsung WAM Speaker';
@@ -311,157 +479,180 @@ async function loadSpeakerControls(ip) {
     }
     
     speakerControls.innerHTML = `
-    <div class="row mb-3">
-        <div class="col-md-6">
-            <h5>Control: ${speakerName}</h5>
-            <small class="text-muted">${speakerModel}</small>
-        </div>
-        <div class="col-md-6 text-end">
-            <button class="btn btn-sm btn-outline-info" onclick="showSpeakerDetails('${ip}')">
-                <i class="bi bi-info-circle"></i> Details
-            </button>
+    <div class="speaker-control-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h4 class="mb-1"><i class="bi bi-speaker me-2"></i>${speakerName}</h4>
+                <p class="text-muted mb-0">${speakerModel} • ${ip}</p>
+            </div>
+            <div>
+                <button class="btn btn-outline-info" onclick="showSpeakerDetails('${ip}')">
+                    <i class="bi bi-info-circle me-1"></i>Details
+                </button>
+            </div>
         </div>
     </div>
     
-    <div class="row">
-        <!-- Power Controls -->
-        <div class="col-md-12 mb-3">
-            <h6>Power</h6>
-            <div class="btn-group" role="group">
-                <button class="btn btn-primary control-btn" onclick="sendCommand('${ip}', 'power', 'on')">
-                    <i class="bi bi-power"></i> On
-                </button>
-                <button class="btn btn-danger control-btn" onclick="sendCommand('${ip}', 'power', 'off')">
-                    <i class="bi bi-power"></i> Off
-                </button>
-            </div>
-        </div>
-        
-        <!-- Volume Controls -->
-        <div class="col-md-12 mb-3">
-            <h6>Volume</h6>
-            <div class="d-flex align-items-center">
-                <button class="btn btn-outline-secondary" onclick="adjustVolume('${ip}', -5)">
-                    <i class="bi bi-volume-down"></i>
-                </button>
-                <input type="range" class="form-control volume-slider mx-2" id="volumeSlider-${ip}" min="0" max="100" value="50">
-                <button class="btn btn-outline-secondary" onclick="adjustVolume('${ip}', 5)">
-                    <i class="bi bi-volume-up"></i>
-                </button>
-                <button class="btn btn-outline-secondary ms-2" onclick="sendCommand('${ip}', 'mute', 'on')">
-                    <i class="bi bi-volume-mute"></i>
-                </button>
-            </div>
-        </div>
-        
-        <!-- Playback Controls -->
-        <div class="col-md-12 mb-3">
-            <h6>Playback</h6>
-            <div class="btn-group" role="group">
-                <button class="btn btn-primary control-btn" onclick="sendCommand('${ip}', 'prev')">
-                    <i class="bi bi-skip-start"></i>
-                </button>
-                <button class="btn btn-success control-btn" onclick="sendCommand('${ip}', 'play')">
-                    <i class="bi bi-play"></i>
-                </button>
-                <button class="btn btn-warning control-btn" onclick="sendCommand('${ip}', 'pause')">
-                    <i class="bi bi-pause"></i>
-                </button>
-                <button class="btn btn-danger control-btn" onclick="sendCommand('${ip}', 'stop')">
-                    <i class="bi bi-stop"></i>
-                </button>
-                <button class="btn btn-primary control-btn" onclick="sendCommand('${ip}', 'next')">
-                    <i class="bi bi-skip-end"></i>
-                </button>
-            </div>
-        </div>
-        
-        <!-- Input Source -->
-        <div class="col-md-12 mb-3">
-            <h6>Input Source</h6>
-            <select class="form-select" id="inputSource-${ip}">
-                <option value="BT">Bluetooth</option>
-                <option value="AUX">Auxiliary</option>
-                <option value="OPT">Optical</option>
-                <option value="HDMI">HDMI</option>
-                <option value="USB">USB</option>
-            </select>
-            <button class="btn btn-primary mt-2" onclick="setInputSource('${ip}')">
-                Set Input
-            </button>
-        </div>
-        
-        <!-- Equalizer Presets -->
-        <div class="col-md-12 mb-3">
-            <h6>Equalizer</h6>
-            <div class="row">
-                <div class="col-md-6">
-                    <label class="form-label">EQ Presets</label>
-                    <select class="form-select mb-2" id="eqPreset-${ip}">
-                        <option value="Normal">Normal</option>
-                        <option value="Flat">Flat</option>
-                        <option value="Jazz">Jazz</option>
-                        <option value="Rock">Rock</option>
-                        <option value="Classical">Classical</option>
-                        <option value="Bass Boost">Bass Boost</option>
-                        <option value="Treble Boost">Treble Boost</option>
-                        <option value="Movie">Movie</option>
-                        <option value="Voice">Voice</option>
-                    </select>
-                    <button class="btn btn-primary btn-sm" onclick="setEqPreset('${ip}')">
-                        Apply EQ Preset
-                    </button>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Manual Equalizer</label>
-                    <button class="btn btn-outline-secondary btn-sm d-block mb-2" onclick="resetEqValues('${ip}')">
-                        Reset to Flat
-                    </button>
-                    <button class="btn btn-success btn-sm d-block" onclick="setEqValues('${ip}')">
-                        Apply Manual EQ
-                    </button>
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Power and Mute Controls -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100 control-card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="bi bi-power me-2"></i>Power Controls</h5>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-success btn-lg" onclick="sendCommand('${ip}', 'power', 'on')">
+                                <i class="bi bi-power me-2"></i>Power On
+                            </button>
+                            <button class="btn btn-danger btn-lg" onclick="sendCommand('${ip}', 'power', 'off')">
+                                <i class="bi bi-power me-2"></i>Power Off
+                            </button>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <h5 class="card-title"><i class="bi bi-volume-mute me-2"></i>Mute</h5>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-secondary" onclick="sendCommand('${ip}', 'mute', 'on')">
+                                <i class="bi bi-volume-mute me-2"></i>Mute
+                            </button>
+                            <button class="btn btn-secondary" onclick="sendCommand('${ip}', 'mute', 'off')">
+                                <i class="bi bi-volume-up me-2"></i>Unmute
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
             
-            <!-- Manual EQ Bands -->
-            <div class="row mt-3">
-                <div class="col-12">
-                    <h6 class="mt-3">Manual EQ Bands:</h6>
-                    <div class="eq-controls-container p-3" style="background: rgba(255,255,255,0.05); border-radius: 8px;">
-                        <div class="eq-band mb-3">
-                            <label class="form-label">150 Hz: <span id="eq150-value-${ip}">0</span>dB</label>
-                            <input type="range" class="form-range" id="eq150-${ip}" min="-6" max="6" value="0" 
-                                oninput="document.getElementById('eq150-value-${ip}').textContent = this.value">
+            <!-- Volume and Playback Controls -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100 control-card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="bi bi-volume-up me-2"></i>Volume</h5>
+                        <div class="mb-3">
+                            <input type="range" class="form-range" id="volumeSlider-${ip}" min="0" max="100" value="50" 
+                                oninput="sendCommand('${ip}', 'volume', this.value)">
+                            <div class="d-flex justify-content-between mt-1">
+                                <small>0%</small>
+                                <small id="volumeValue-${ip}">50%</small>
+                                <small>100%</small>
+                            </div>
                         </div>
-                        <div class="eq-band mb-3">
-                            <label class="form-label">300 Hz: <span id="eq300-value-${ip}">0</span>dB</label>
-                            <input type="range" class="form-range" id="eq300-${ip}" min="-6" max="6" value="0" 
-                                oninput="document.getElementById('eq300-value-${ip}').textContent = this.value">
+                        
+                        <hr class="my-4">
+                        
+                        <h5 class="card-title"><i class="bi bi-play-circle me-2"></i>Playback</h5>
+                        <div class="d-grid gap-2">
+                            <div class="btn-group">
+                                <button class="btn btn-primary flex-grow-1" onclick="sendCommand('${ip}', 'prev')">
+                                    <i class="bi bi-skip-start"></i>
+                                </button>
+                                <button class="btn btn-success flex-grow-1" onclick="sendCommand('${ip}', 'play')">
+                                    <i class="bi bi-play"></i>
+                                </button>
+                                <button class="btn btn-warning flex-grow-1" onclick="sendCommand('${ip}', 'pause')">
+                                    <i class="bi bi-pause"></i>
+                                </button>
+                                <button class="btn btn-danger flex-grow-1" onclick="sendCommand('${ip}', 'stop')">
+                                    <i class="bi bi-stop"></i>
+                                </button>
+                                <button class="btn btn-primary flex-grow-1" onclick="sendCommand('${ip}', 'next')">
+                                    <i class="bi bi-skip-end"></i>
+                                </button>
+                            </div>
                         </div>
-                        <div class="eq-band mb-3">
-                            <label class="form-label">600 Hz: <span id="eq600-value-${ip}">0</span>dB</label>
-                            <input type="range" class="form-range" id="eq600-${ip}" min="-6" max="6" value="0" 
-                                oninput="document.getElementById('eq600-value-${ip}').textContent = this.value">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Input and Equalizer Controls -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100 control-card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="bi bi-input-cursor-text me-2"></i>Input Source</h5>
+                        <select class="form-select mb-3" id="inputSource-${ip}">
+                            <option value="BT">Bluetooth</option>
+                            <option value="AUX">Auxiliary</option>
+                            <option value="OPT">Optical</option>
+                            <option value="HDMI">HDMI</option>
+                            <option value="USB">USB</option>
+                        </select>
+                        <button class="btn btn-primary w-100" onclick="setInputSource('${ip}')">
+                            <i class="bi bi-arrow-repeat me-2"></i>Set Input
+                        </button>
+                        
+                        <hr class="my-4">
+                        
+                        <h5 class="card-title"><i class="bi bi-sliders me-2"></i>Equalizer</h5>
+                        <div class="mb-3">
+                            <label class="form-label">EQ Presets</label>
+                            <select class="form-select" id="eqPreset-${ip}">
+                                <option value="Normal">Normal</option>
+                                <option value="Flat">Flat</option>
+                                <option value="Jazz">Jazz</option>
+                                <option value="Rock">Rock</option>
+                                <option value="Classical">Classical</option>
+                                <option value="Bass Boost">Bass Boost</option>
+                                <option value="Treble Boost">Treble Boost</option>
+                                <option value="Movie">Movie</option>
+                                <option value="Voice">Voice</option>
+                            </select>
                         </div>
-                        <div class="eq-band mb-3">
-                            <label class="form-label">1.2 kHz: <span id="eq1200-value-${ip}">0</span>dB</label>
-                            <input type="range" class="form-range" id="eq1200-${ip}" min="-6" max="6" value="0" 
-                                oninput="document.getElementById('eq1200-value-${ip}').textContent = this.value">
-                        </div>
-                        <div class="eq-band mb-3">
-                            <label class="form-label">2.5 kHz: <span id="eq2500-value-${ip}">0</span>dB</label>
-                            <input type="range" class="form-range" id="eq2500-${ip}" min="-6" max="6" value="0" 
-                                oninput="document.getElementById('eq2500-value-${ip}').textContent = this.value">
-                        </div>
-                        <div class="eq-band mb-3">
-                            <label class="form-label">5.0 kHz: <span id="eq5000-value-${ip}">0</span>dB</label>
-                            <input type="range" class="form-range" id="eq5000-${ip}" min="-6" max="6" value="0" 
-                                oninput="document.getElementById('eq5000-value-${ip}').textContent = this.value">
-                        </div>
-                        <div class="eq-band mb-3">
-                            <label class="form-label">10 kHz: <span id="eq10000-value-${ip}">0</span>dB</label>
-                            <input type="range" class="form-range" id="eq10000-${ip}" min="-6" max="6" value="0" 
-                                oninput="document.getElementById('eq10000-value-${ip}').textContent = this.value">
+                        <button class="btn btn-primary w-100 mb-3" onclick="setEqPreset('${ip}')">
+                            <i class="bi bi-music-note-beamed me-2"></i>Apply EQ Preset
+                        </button>
+                        
+                        <button class="btn btn-outline-secondary w-100" onclick="toggleEqControls('${ip}')">
+                            <i class="bi bi-sliders me-2"></i>Manual EQ Controls
+                        </button>
+                        
+                        <!-- Manual EQ Controls (initially hidden) -->
+                        <div id="eqControls-${ip}" class="eq-controls mt-3" style="display: none;">
+                            <h6 class="mt-3 mb-2">Manual EQ Bands:</h6>
+                            <div class="eq-band mb-2">
+                                <label class="form-label">150 Hz: <span id="eq150-value-${ip}">0</span>dB</label>
+                                <input type="range" class="form-range" id="eq150-${ip}" min="-6" max="6" value="0" 
+                                    oninput="document.getElementById('eq150-value-${ip}').textContent = this.value">
+                            </div>
+                            <div class="eq-band mb-2">
+                                <label class="form-label">300 Hz: <span id="eq300-value-${ip}">0</span>dB</label>
+                                <input type="range" class="form-range" id="eq300-${ip}" min="-6" max="6" value="0" 
+                                    oninput="document.getElementById('eq300-value-${ip}').textContent = this.value">
+                            </div>
+                            <div class="eq-band mb-2">
+                                <label class="form-label">600 Hz: <span id="eq600-value-${ip}">0</span>dB</label>
+                                <input type="range" class="form-range" id="eq600-${ip}" min="-6" max="6" value="0" 
+                                    oninput="document.getElementById('eq600-value-${ip}').textContent = this.value">
+                            </div>
+                            <div class="eq-band mb-2">
+                                <label class="form-label">1.2 kHz: <span id="eq1200-value-${ip}">0</span>dB</label>
+                                <input type="range" class="form-range" id="eq1200-${ip}" min="-6" max="6" value="0" 
+                                    oninput="document.getElementById('eq1200-value-${ip}').textContent = this.value">
+                            </div>
+                            <div class="eq-band mb-2">
+                                <label class="form-label">2.5 kHz: <span id="eq2500-value-${ip}">0</span>dB</label>
+                                <input type="range" class="form-range" id="eq2500-${ip}" min="-6" max="6" value="0" 
+                                    oninput="document.getElementById('eq2500-value-${ip}').textContent = this.value">
+                            </div>
+                            <div class="eq-band mb-2">
+                                <label class="form-label">5.0 kHz: <span id="eq5000-value-${ip}">0</span>dB</label>
+                                <input type="range" class="form-range" id="eq5000-${ip}" min="-6" max="6" value="0" 
+                                    oninput="document.getElementById('eq5000-value-${ip}').textContent = this.value">
+                            </div>
+                            <div class="eq-band mb-2">
+                                <label class="form-label">10 kHz: <span id="eq10000-value-${ip}">0</span>dB</label>
+                                <input type="range" class="form-range" id="eq10000-${ip}" min="-6" max="6" value="0" 
+                                    oninput="document.getElementById('eq10000-value-${ip}').textContent = this.value">
+                            </div>
+                            
+                            <div class="d-grid gap-2 mt-3">
+                                <button class="btn btn-outline-secondary" onclick="resetEqValues('${ip}')">
+                                    <i class="bi bi-arrow-counterclockwise me-2"></i>Reset to Flat
+                                </button>
+                                <button class="btn btn-success" onclick="setEqValues('${ip}')">
+                                    <i class="bi bi-check-circle me-2"></i>Apply Manual EQ
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -470,12 +661,240 @@ async function loadSpeakerControls(ip) {
     </div>
     `;
     
-    // Add event listener for volume slider
+    // Add event listener for volume slider to update the display
     const volumeSlider = document.getElementById(`volumeSlider-${ip}`);
-    if (volumeSlider) {
+    const volumeValue = document.getElementById(`volumeValue-${ip}`);
+    if (volumeSlider && volumeValue) {
         volumeSlider.addEventListener('change', (e) => {
+            volumeValue.textContent = `${e.target.value}%`;
             sendCommand(ip, 'volume', e.target.value);
         });
+        // Set initial value
+        loadSpeakerProperties(ip).then(() => {
+            // Once properties are loaded, update the slider position
+            if (speakerStates && speakerStates[ip] && speakerStates[ip].volume !== undefined) {
+                volumeSlider.value = speakerStates[ip].volume;
+                volumeValue.textContent = `${speakerStates[ip].volume}%`;
+            }
+        });
+    }
+}
+
+// Load group controls
+async function loadGroupControls(groupId) {
+    selectedGroup = groupId;
+    selectedSpeaker = null; // Clear any selected speaker
+    
+    // Get the group details
+    const group = speakerGroups.find(g => g.id === groupId);
+    if (!group) {
+        addLog(`Group ${groupId} not found`);
+        return;
+    }
+    
+    const speakerNames = group.speakers.map(s => s.name || s.ip).join(', ');
+    
+    speakerControls.innerHTML = `
+    <div class="speaker-control-header mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <h4 class="mb-1"><i class="bi bi-collection-play me-2"></i>Group: ${groupId}</h4>
+                <p class="text-muted mb-0">Controlling ${group.speakers.length} speakers: ${speakerNames}</p>
+            </div>
+            <div>
+                <button class="btn btn-outline-secondary" onclick="ws.send(JSON.stringify({type: 'request_groups'}))">
+                    <i class="bi bi-arrow-repeat me-1"></i>Refresh
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Power and Mute Controls for Group -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100 control-card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="bi bi-power me-2"></i>Group Power Controls</h5>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-success btn-lg" onclick="sendGroupCommand('${groupId}', 'power', 'on')">
+                                <i class="bi bi-power me-2"></i>Power On All
+                            </button>
+                            <button class="btn btn-danger btn-lg" onclick="sendGroupCommand('${groupId}', 'power', 'off')">
+                                <i class="bi bi-power me-2"></i>Power Off All
+                            </button>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <h5 class="card-title"><i class="bi bi-volume-mute me-2"></i>Group Mute</h5>
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-secondary" onclick="sendGroupCommand('${groupId}', 'mute', 'on')">
+                                <i class="bi bi-volume-mute me-2"></i>Mute All
+                            </button>
+                            <button class="btn btn-secondary" onclick="sendGroupCommand('${groupId}', 'mute', 'off')">
+                                <i class="bi bi-volume-up me-2"></i>Unmute All
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Volume and Playback Controls for Group -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100 control-card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="bi bi-volume-up me-2"></i>Group Volume</h5>
+                        <div class="mb-3">
+                            <input type="range" class="form-range" id="groupVolumeSlider-${groupId}" min="0" max="100" value="50" 
+                                oninput="sendGroupCommand('${groupId}', 'volume', this.value)">
+                            <div class="d-flex justify-content-between mt-1">
+                                <small>0%</small>
+                                <small id="groupVolumeValue-${groupId}">50%</small>
+                                <small>100%</small>
+                            </div>
+                        </div>
+                        
+                        <hr class="my-4">
+                        
+                        <h5 class="card-title"><i class="bi bi-play-circle me-2"></i>Group Playback</h5>
+                        <div class="d-grid gap-2">
+                            <div class="btn-group">
+                                <button class="btn btn-primary flex-grow-1" onclick="sendGroupCommand('${groupId}', 'prev')">
+                                    <i class="bi bi-skip-start"></i>
+                                </button>
+                                <button class="btn btn-success flex-grow-1" onclick="sendGroupCommand('${groupId}', 'play')">
+                                    <i class="bi bi-play"></i>
+                                </button>
+                                <button class="btn btn-warning flex-grow-1" onclick="sendGroupCommand('${groupId}', 'pause')">
+                                    <i class="bi bi-pause"></i>
+                                </button>
+                                <button class="btn btn-danger flex-grow-1" onclick="sendGroupCommand('${groupId}', 'stop')">
+                                    <i class="bi bi-stop"></i>
+                                </button>
+                                <button class="btn btn-primary flex-grow-1" onclick="sendGroupCommand('${groupId}', 'next')">
+                                    <i class="bi bi-skip-end"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Input and Equalizer Controls for Group -->
+            <div class="col-lg-4 mb-4">
+                <div class="card h-100 control-card">
+                    <div class="card-body">
+                        <h5 class="card-title"><i class="bi bi-input-cursor-text me-2"></i>Group Input Source</h5>
+                        <select class="form-select mb-3" id="groupInputSource-${groupId}">
+                            <option value="BT">Bluetooth</option>
+                            <option value="AUX">Auxiliary</option>
+                            <option value="OPT">Optical</option>
+                            <option value="HDMI">HDMI</option>
+                            <option value="USB">USB</option>
+                        </select>
+                        <button class="btn btn-primary w-100" onclick="setGroupInputSource('${groupId}')">
+                            <i class="bi bi-arrow-repeat me-2"></i>Set Input for All
+                        </button>
+                        
+                        <hr class="my-4">
+                        
+                        <h5 class="card-title"><i class="bi bi-sliders me-2"></i>Group Equalizer</h5>
+                        <div class="mb-3">
+                            <label class="form-label">EQ Presets</label>
+                            <select class="form-select" id="groupEqPreset-${groupId}">
+                                <option value="Normal">Normal</option>
+                                <option value="Flat">Flat</option>
+                                <option value="Jazz">Jazz</option>
+                                <option value="Rock">Rock</option>
+                                <option value="Classical">Classical</option>
+                                <option value="Bass Boost">Bass Boost</option>
+                                <option value="Treble Boost">Treble Boost</option>
+                                <option value="Movie">Movie</option>
+                                <option value="Voice">Voice</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-primary w-100 mb-3" onclick="setGroupEqPreset('${groupId}')">
+                            <i class="bi bi-music-note-beamed me-2"></i>Apply EQ Preset to All
+                        </button>
+                        
+                        <button class="btn btn-outline-secondary w-100" onclick="toggleGroupEqControls('${groupId}')">
+                            <i class="bi bi-sliders me-2"></i>Manual Group EQ Controls
+                        </button>
+                        
+                        <!-- Manual Group EQ Controls (initially hidden) -->
+                        <div id="groupEqControls-${groupId}" class="eq-controls mt-3" style="display: none;">
+                            <h6 class="mt-3 mb-2">Manual Group EQ Bands:</h6>
+                            <div class="eq-band mb-2">
+                                <label class="form-label">150 Hz: <span id="groupEq150-value-${groupId}">0</span>dB</label>
+                                <input type="range" class="form-range" id="groupEq150-${groupId}" min="-6" max="6" value="0" 
+                                    oninput="document.getElementById('groupEq150-value-${groupId}').textContent = this.value">
+                            </div>
+                            <div class="eq-band mb-2">
+                                <label class="form-label">300 Hz: <span id="groupEq300-value-${groupId}">0</span>dB</label>
+                                <input type="range" class="form-range" id="groupEq300-${groupId}" min="-6" max="6" value="0" 
+                                    oninput="document.getElementById('groupEq300-value-${groupId}').textContent = this.value">
+                            </div>
+                            <div class="eq-band mb-2">
+                                <label class="form-label">600 Hz: <span id="groupEq600-value-${groupId}">0</span>dB</label>
+                                <input type="range" class="form-range" id="groupEq600-${groupId}" min="-6" max="6" value="0" 
+                                    oninput="document.getElementById('groupEq600-value-${groupId}').textContent = this.value">
+                            </div>
+                            <div class="eq-band mb-2">
+                                <label class="form-label">1.2 kHz: <span id="groupEq1200-value-${groupId}">0</span>dB</label>
+                                <input type="range" class="form-range" id="groupEq1200-${groupId}" min="-6" max="6" value="0" 
+                                    oninput="document.getElementById('groupEq1200-value-${groupId}').textContent = this.value">
+                            </div>
+                            <div class="eq-band mb-2">
+                                <label class="form-label">2.5 kHz: <span id="groupEq2500-value-${groupId}">0</span>dB</label>
+                                <input type="range" class="form-range" id="groupEq2500-${groupId}" min="-6" max="6" value="0" 
+                                    oninput="document.getElementById('groupEq2500-value-${groupId}').textContent = this.value">
+                            </div>
+                            <div class="eq-band mb-2">
+                                <label class="form-label">5.0 kHz: <span id="groupEq5000-value-${groupId}">0</span>dB</label>
+                                <input type="range" class="form-range" id="groupEq5000-${groupId}" min="-6" max="6" value="0" 
+                                    oninput="document.getElementById('groupEq5000-value-${groupId}').textContent = this.value">
+                            </div>
+                            <div class="eq-band mb-2">
+                                <label class="form-label">10 kHz: <span id="groupEq10000-value-${groupId}">0</span>dB</label>
+                                <input type="range" class="form-range" id="groupEq10000-${groupId}" min="-6" max="6" value="0" 
+                                    oninput="document.getElementById('groupEq10000-value-${groupId}').textContent = this.value">
+                            </div>
+                            
+                            <div class="d-grid gap-2 mt-3">
+                                <button class="btn btn-outline-secondary" onclick="resetGroupEqValues('${groupId}')">
+                                    <i class="bi bi-arrow-counterclockwise me-2"></i>Reset All to Flat
+                                </button>
+                                <button class="btn btn-success" onclick="setGroupEqValues('${groupId}')">
+                                    <i class="bi bi-check-circle me-2"></i>Apply Manual EQ to All
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    `;
+}
+
+// Toggle manual EQ controls
+function toggleEqControls(ip) {
+    const eqControls = document.getElementById(`eqControls-${ip}`);
+    if (eqControls.style.display === 'none') {
+        eqControls.style.display = 'block';
+    } else {
+        eqControls.style.display = 'none';
+    }
+}
+
+// Toggle manual group EQ controls
+function toggleGroupEqControls(groupId) {
+    const groupEqControls = document.getElementById(`groupEqControls-${groupId}`);
+    if (groupEqControls.style.display === 'none') {
+        groupEqControls.style.display = 'block';
+    } else {
+        groupEqControls.style.display = 'none';
     }
 }
 
@@ -573,6 +992,102 @@ function setInputSource(ip) {
     }
 }
 
+// Set group input source
+function setGroupInputSource(groupId) {
+    const inputSelect = document.getElementById(`groupInputSource-${groupId}`);
+    if (inputSelect) {
+        const value = inputSelect.value;
+        sendGroupCommand(groupId, 'set_input', value);
+    }
+}
+
+// Send command to a group
+async function sendGroupCommand(groupId, command, value = null) {
+    // Find a speaker that belongs to this group to use as reference
+    const group = speakerGroups.find(g => g.id === groupId);
+    if (!group || group.speakers.length === 0) {
+        addLog(`No speakers found in group ${groupId}`);
+        return;
+    }
+    
+    const referenceSpeaker = group.speakers[0].ip;
+    
+    try {
+        addLog(`Sending command '${command}'${value ? ` with value '${value}'` : ''} to group ${groupId}`);
+        
+        const response = await fetch(`/api/speakers/${referenceSpeaker}/command`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                command: command,
+                value: value,
+                target: "group"
+            })
+        });
+        
+        if (response.ok) {
+            const result = await response.json();
+            addLog(`Group command sent successfully to ${result.success_count} speakers, ${result.fail_count} failed`);
+        } else {
+            const result = await response.json();
+            addLog(`Group command failed: ${result.detail || 'Unknown error'}`);
+        }
+    } catch (error) {
+        addLog(`Group command error: ${error.message}`);
+    }
+}
+
+// Set group EQ preset
+function setGroupEqPreset(groupId) {
+    const eqSelect = document.getElementById(`groupEqPreset-${groupId}`);
+    if (eqSelect) {
+        const value = eqSelect.value;
+        sendGroupCommand(groupId, 'set_eq_preset', value);
+    }
+}
+
+// Set group EQ values
+function setGroupEqValues(groupId) {
+    // Get all EQ band values from the sliders
+    const eq150 = document.getElementById(`groupEq150-${groupId}`).value;
+    const eq300 = document.getElementById(`groupEq300-${groupId}`).value;
+    const eq600 = document.getElementById(`groupEq600-${groupId}`).value;
+    const eq1200 = document.getElementById(`groupEq1200-${groupId}`).value;
+    const eq2500 = document.getElementById(`groupEq2500-${groupId}`).value;
+    const eq5000 = document.getElementById(`groupEq5000-${groupId}`).value;
+    const eq10000 = document.getElementById(`groupEq10000-${groupId}`).value;
+    
+    // For now, use a default preset index of 0
+    const presetIndex = 0;
+    
+    const values = `${presetIndex},${eq150},${eq300},${eq600},${eq1200},${eq2500},${eq5000},${eq10000}`;
+    sendGroupCommand(groupId, 'set_eq_values', values);
+}
+
+// Reset group EQ values
+function resetGroupEqValues(groupId) {
+    document.getElementById(`groupEq150-${groupId}`).value = 0;
+    document.getElementById(`groupEq300-${groupId}`).value = 0;
+    document.getElementById(`groupEq600-${groupId}`).value = 0;
+    document.getElementById(`groupEq1200-${groupId}`).value = 0;
+    document.getElementById(`groupEq2500-${groupId}`).value = 0;
+    document.getElementById(`groupEq5000-${groupId}`).value = 0;
+    document.getElementById(`groupEq10000-${groupId}`).value = 0;
+    
+    // Update the displayed values
+    document.getElementById(`groupEq150-value-${groupId}`).textContent = "0";
+    document.getElementById(`groupEq300-value-${groupId}`).textContent = "0";
+    document.getElementById(`groupEq600-value-${groupId}`).textContent = "0";
+    document.getElementById(`groupEq1200-value-${groupId}`).textContent = "0";
+    document.getElementById(`groupEq2500-value-${groupId}`).textContent = "0";
+    document.getElementById(`groupEq5000-value-${groupId}`).textContent = "0";
+    document.getElementById(`groupEq10000-value-${groupId}`).textContent = "0";
+    
+    setGroupEqValues(groupId);
+}
+
 // Show speaker details modal
 async function showSpeakerDetails(ip, port = null) {
     const detailsBody = document.getElementById('speakerDetailsBody');
@@ -600,11 +1115,11 @@ async function showSpeakerDetails(ip, port = null) {
             `;
         } else {
             // Fallback to basic info if API call fails
-            const speaker = discoveredSpeakers.find(s => s.ip === ip);
+            const speaker = [...discoveredSpeakers, ...connectedSpeakers].find(s => s.ip === ip);
             if (speaker) {
                 detailsBody.innerHTML = `
                 <tr><td>IP Address</td><td>${speaker.ip}</td></tr>
-                <tr><td>Port</td><td>${port || speaker.port || '55001'}</td></tr>
+                <tr><td>Port</td><td>${port || '55001'}</td></tr>
                 <tr><td>Name</td><td>${speaker.name || 'Unknown'}</td></tr>
                 <tr><td>Model</td><td>${speaker.model || 'Samsung WAM Speaker'}</td></tr>
                 <tr><td>Status</td><td>${selectedSpeaker === ip ? 'Connected' : 'Disconnected'}</td></tr>
@@ -618,11 +1133,11 @@ async function showSpeakerDetails(ip, port = null) {
         }
     } catch (error) {
         // Fallback to basic info if there's an error
-        const speaker = discoveredSpeakers.find(s => s.ip === ip);
+        const speaker = [...discoveredSpeakers, ...connectedSpeakers].find(s => s.ip === ip);
         if (speaker) {
             detailsBody.innerHTML = `
             <tr><td>IP Address</td><td>${speaker.ip}</td></tr>
-            <tr><td>Port</td><td>${port || speaker.port || '55001'}</td></tr>
+            <tr><td>Port</td><td>${port || '55001'}</td></tr>
             <tr><td>Name</td><td>${speaker.name || 'Unknown'}</td></tr>
             <tr><td>Model</td><td>${speaker.model || 'Samsung WAM Speaker'}</td></tr>
             <tr><td>Status</td><td>${selectedSpeaker === ip ? 'Connected' : 'Disconnected'}</td></tr>
@@ -654,16 +1169,24 @@ async function loadSpeakerProperties(ip) {
             // Update volume slider if we have volume info
             if (data.properties && data.properties.volume !== undefined) {
                 const volumeSlider = document.getElementById(`volumeSlider-${ip}`);
+                const volumeValue = document.getElementById(`volumeValue-${ip}`);
                 if (volumeSlider) {
                     volumeSlider.value = data.properties.volume;
                 }
+                if (volumeValue) {
+                    volumeValue.textContent = `${data.properties.volume}%`;
+                }
             }
+            
+            return data.properties;
         } else {
             const result = await response.json();
             addLog(`Failed to load properties: ${result.detail || 'Unknown error'}`);
+            return null;
         }
     } catch (error) {
         addLog(`Properties load error: ${error.message}`);
+        return null;
     }
 }
 
