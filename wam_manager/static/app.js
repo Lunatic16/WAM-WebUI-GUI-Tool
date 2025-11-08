@@ -13,11 +13,11 @@ const maxReconnectAttempts = 10;
 
 // DOM elements
 const discoverBtn = document.getElementById('discoverBtn');
+const disconnectAllBtn = document.getElementById('disconnectAllBtn');
 const discoveredSpeakersList = document.getElementById('discoveredSpeakersList');
-const connectedSpeakersList = document.getElementById('connectedSpeakersList');  // Added
+const connectedSpeakersList = document.getElementById('connectedSpeakersList');
 const logOutput = document.getElementById('logOutput');
 const wsStatus = document.getElementById('wsStatus');
-const connectionStatusDiv = document.getElementById('connectionStatusDiv');
 const speakerControls = document.getElementById('speakerControls');
 const refreshControlsBtn = document.getElementById('refreshControlsBtn');
 
@@ -407,43 +407,9 @@ async function connectToSpeaker(ip) {
     }
 }
 
-// Update connection status display
+// Update connection status display - now using connectedSpeakersList instead
 function updateConnectionStatus() {
-    if (discoveredSpeakers.length === 0) {
-        connectionStatusDiv.innerHTML = '<p class="text-muted">No speakers discovered</p>';
-        return;
-    }
-    
-    let html = '<ul class="list-group">';
-    discoveredSpeakers.forEach(speaker => {
-        const isConnected = selectedSpeaker === speaker.ip;
-        html += `
-        <li class="list-group-item d-flex justify-content-between align-items-center" style="background-color: var(--card-bg);">
-            <div>
-                <span class="speaker-status ${isConnected ? 'status-online' : 'status-offline'}"></span>
-                <strong>${speaker.name || speaker.ip}</strong><br>
-                <small class="text-muted">${speaker.model || 'Samsung WAM Speaker'} - ${speaker.ip}:${speaker.port}</small>
-            </div>
-            <div>
-                ${isConnected ? 
-                    '<span class="badge bg-success">Connected</span>' : 
-                    '<button class="btn btn-sm btn-outline-primary connect-sm-btn" data-ip="' + speaker.ip + '">Connect</button>'
-                }
-            </div>
-        </li>
-        `;
-    });
-    html += '</ul>';
-    
-    connectionStatusDiv.innerHTML = html;
-    
-    // Add event listeners to small connect buttons
-    document.querySelectorAll('.connect-sm-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-            const ip = e.target.getAttribute('data-ip');
-            connectToSpeaker(ip);
-        });
-    });
+    updateConnectedSpeakersList();
 }
 
 // Select a speaker in the UI
